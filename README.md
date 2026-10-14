@@ -344,19 +344,19 @@ For example:
 
 ```text
 2020
-Aral moves to New York City.
+Andy moves to New York City.
 
 2024
-Mert visits the United States through Work & Travel.
+Matt visits the United States through Work & Travel.
 
 Summer 2024
-Mert and Aral meet again for the first time since middle school.
+Matt and Andy meet again for the first time since middle school.
 ```
 
 If ComArtist later generates a flashback set in **2019**, it must understand that:
 
 ```text
-Aral has NOT moved to NYC yet.
+Andy has NOT moved to NYC yet.
 ```
 
 Long-term memory therefore needs to represent not only:
@@ -378,7 +378,7 @@ ComArtist separates information into three categories.
 Facts established by the user or previously accepted chapters.
 
 ```text
-Aral moved to NYC in 2020.
+Andy moved to NYC in 2020.
 ```
 
 Agents cannot silently modify canon.
@@ -388,7 +388,7 @@ Agents cannot silently modify canon.
 Reasonable conclusions based on existing canon.
 
 ```text
-Aral probably knows NYC better than Mert.
+Andy probably knows NYC better than Matt.
 ```
 
 ### Ephemeral Fiction
@@ -396,7 +396,7 @@ Aral probably knows NYC better than Mert.
 Scene-level details the agents are free to invent.
 
 ```text
-Aral jokes that Mert still orders the same drink he liked years ago.
+Andy jokes that Matt still orders the same drink he liked years ago.
 ```
 
 This distinction allows agents to be creative without hallucinating permanent facts about the story universe.
@@ -589,10 +589,10 @@ ComArtist is primarily an **AI systems project**, not a frontend project.
 │  What happens in this chapter?               │
 │                                              │
 │  ┌────────────────────────────────────────┐  │
-│  │ Summer 2024. Mert meets his old...    │  │
+│  │ Summer 2024. Matt meets his old...    │  │
 │  └────────────────────────────────────────┘  │
 │                                              │
-│  Characters: Mert, Aral                      │
+│  Characters: Matt, Andy                      │
 │  Target pages: 18                            │
 │                                              │
 │           [ Generate Chapter ]               │
