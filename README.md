@@ -60,13 +60,13 @@ timeframe: Summer 2024
 location: New York City
 
 characters:
-  - Mert
-  - Aral
+  - Matt
+  - Andy
 
 canon:
-  - Aral moved to NYC in 2020.
-  - Mert and Aral have not met since middle school.
-  - Mert is in the United States for Work & Travel.
+  - Andy moved to NYC in 2020.
+  - Matt and Andy have not met since middle school.
+  - Matt is in the United States for Work & Travel.
   - They meet near NYU.
   - They go to a pub where Harry Potter is playing.
   - They spend the evening catching up about their lives.
