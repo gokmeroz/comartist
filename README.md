@@ -1,5 +1,26 @@
 # 🎨 ComArtist
 
+## Local development
+
+The initial scaffold requires Python 3.12+ and uv. Install dependencies and run
+the model tests:
+
+```sh
+uv sync
+uv run pytest
+```
+
+Start the minimal chapter brief interface:
+
+```sh
+uv run streamlit run src/comartist/app.py
+```
+
+The current implementation contains only core domain models and a basic input
+page. The architecture below describes the longer-term vision; AI agents,
+orchestration, generation, and persistence are not implemented yet. See
+[AGENTS.md](AGENTS.md) for the current five-agent implementation direction.
+
 > **An autonomous multi-agent system that turns ideas into coherent, evolving comic chapters.**
 
 ComArtist is an experimental **Agentic AI comic-production system** designed to transform a simple story idea into a complete comic chapter.
