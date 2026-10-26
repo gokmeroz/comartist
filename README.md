@@ -37,7 +37,7 @@ change rather than a code change.
 
 | Provider | Offer | Status |
 |---|---|---|
-| Meta Model API | $150 credits (claim by Nov 4, 9:00 PM ET; card required, set a spend limit) | Applied |
+| Meta Model API | $150 credits (card required, set a spend limit) | **Received** — primary provider |
 | Modal | $100 credits (open-weights Endpoints + serverless GPUs) | Applied |
 | Fireworks | $25 credits (open-weights models) | Applied |
 | Baseten | $100 credits + 2M TPM (open-weights models) | Not applied — alternative |
@@ -763,7 +763,7 @@ ComArtist explores questions including:
 
 | Days | Goal |
 |---|---|
-| Oct 26–27 | Provider adapters + stub, confirm credits, typed schemas, evaluation fixture |
+| Oct 26–27 | Meta Model API adapter + stub (Meta credits received), typed schemas, evaluation fixture |
 | Oct 28–30 | Narrative MVP: Story Architect → Script Writer ⇄ Critic in LangGraph |
 | Oct 31–Nov 2 | Visual Director, panel generation (Muse Image), visual Critic with bounded revision |
 | Nov 3 | Lettering/layout, Chapter Judge, Streamlit demo of a full short chapter |
