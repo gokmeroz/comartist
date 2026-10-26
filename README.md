@@ -20,6 +20,18 @@ short chapter, show **technical ambition** (multi-agent orchestration,
 critique-driven revision, continuity memory), and be **creative** in output.
 Breadth beyond that is deferred until after the deadline.
 
+### Prior work disclosure
+
+ComArtist began as a concept before the hackathon. Before Oct 26, 2026 the
+repository contained a project README, an empty package layout, three Pydantic
+data models (chapter, character, state), a minimal Streamlit input page, and one
+test file. No agents, model integrations, image generation, or continuity checks
+existed. Everything else was built during the hackathon (Oct 26 – Nov 4, 2026).
+
+The pre-hackathon snapshot is tagged
+[`pre-hackathon`](https://github.com/gokmeroz/comartist/tree/pre-hackathon);
+see the [full diff of hackathon work](https://github.com/gokmeroz/comartist/compare/pre-hackathon...main).
+
 ## 🔌 Model Providers and Fallbacks
 
 ComArtist uses Meta models wherever possible. Every model call goes through a
