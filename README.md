@@ -1,5 +1,61 @@
 # 🎨 ComArtist
 
+> Built for the **[Meta Global AI Developer Hackathon](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/details)**
+> (Meta × Cerebral Valley, remote, Oct 26 – Nov 4, 2026).
+> Track: **Indie developer** · Theme: **Build for Your World**.
+
+## 🏁 Hackathon Context
+
+| | |
+|---|---|
+| Event | Meta Global AI Developer Hackathon (virtual, worldwide) |
+| Build window | Oct 26, 2026 12:00 PM ET → Nov 4, 2026 9:00 PM ET |
+| Submission deadline | **Nov 4, 2026, 9:00 PM ET** |
+| Judging | Nov 4 – Nov 8 · Winners announced Nov 9 |
+| Track | Indie developer — judged on creativity, technical ambition, and whether it works |
+| Theme | Build for Your World — turn a personal story into a coherent comic chapter |
+
+Judging criteria shape the scope: the submission must **work end to end** on a
+short chapter, show **technical ambition** (multi-agent orchestration,
+critique-driven revision, continuity memory), and be **creative** in output.
+Breadth beyond that is deferred until after the deadline.
+
+## 🔌 Model Providers and Fallbacks
+
+ComArtist uses Meta models wherever possible. Every model call goes through a
+provider adapter (LiteLLM-style), so switching providers is a configuration
+change rather than a code change.
+
+| Role | Primary (Meta) | Fallback |
+|---|---|---|
+| Story Architect, Script Writer, Visual Director | Muse Spark series via Meta Model API | Meta open-weights models on Fireworks, Modal, or Baseten |
+| Critic (script + visual), Chapter Judge | Muse Spark / Muse Wonder via Meta Model API | Open-weights multimodal Meta models on Fireworks or Modal |
+| Panel generation | Muse Image via Meta Model API | Diffusers pipeline on Modal serverless GPUs |
+| Character / object segmentation for visual checks | SAM 3.1 | Skip segmentation; rely on multimodal Critic only |
+
+**Credits:**
+
+| Provider | Offer | Status |
+|---|---|---|
+| Meta Model API | $150 credits (claim by Nov 4, 9:00 PM ET; card required, set a spend limit) | Applied |
+| Modal | $100 credits (open-weights Endpoints + serverless GPUs) | Applied |
+| Fireworks | $25 credits (open-weights models) | Applied |
+| Baseten | $100 credits + 2M TPM (open-weights models) | Not applied — alternative |
+
+**If credits are not granted**, the fallback order is:
+
+1. Another credited partner from the table above (any one of Modal,
+   Fireworks, or Baseten is enough to run Meta open-weights text models).
+2. Pay-as-you-go on the cheapest available provider, with a hard spend limit
+   and per-run cost tracking.
+3. Local inference of small Meta open-weights models (e.g. via vLLM or
+   Hugging Face Transformers) for text agents, plus a locally run Diffusers
+   pipeline for panels at reduced resolution.
+4. A deterministic stub adapter so tests and the UI demo still run with no
+   provider at all.
+
+Credentials are read from environment variables only (never committed).
+
 ## Local development
 
 The initial scaffold requires Python 3.12+ and uv. Install dependencies and run
@@ -576,7 +632,9 @@ Temporal Memory
 ### Model Serving
 
 ```text
-vLLM
+Meta Model API (Muse Spark, Muse Wonder, Muse Image, SAM 3.1)
+Fireworks / Modal / Baseten (Meta open-weights models)
+vLLM (local fallback)
 ```
 
 ### Interface
@@ -700,6 +758,18 @@ ComArtist explores questions including:
 ### Can a system maintain coherent canon across 100+ chapters?
 
 ---
+
+# ⏱️ Hackathon Plan (Oct 26 – Nov 4)
+
+| Days | Goal |
+|---|---|
+| Oct 26–27 | Provider adapters + stub, confirm credits, typed schemas, evaluation fixture |
+| Oct 28–30 | Narrative MVP: Story Architect → Script Writer ⇄ Critic in LangGraph |
+| Oct 31–Nov 2 | Visual Director, panel generation (Muse Image), visual Critic with bounded revision |
+| Nov 3 | Lettering/layout, Chapter Judge, Streamlit demo of a full short chapter |
+| Nov 4 | Freeze, record demo, write submission — **due 9:00 PM ET** |
+
+The roadmap below is the longer-term plan beyond the hackathon.
 
 # 🗺️ Development Roadmap
 
