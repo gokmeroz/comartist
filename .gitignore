@@ -12,3 +12,5 @@ build/
 !.env.example
 .streamlit/secrets.toml
 .DS_Store
+runs/
+.claude/worktrees/
