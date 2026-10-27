@@ -6,9 +6,9 @@
 
 ## 🎬 Teaser (60s)
 
-[![ComArtist teaser: a brief becomes a comic chapter, with a Critic that catches continuity errors](docs/media/comartist-teaser.jpg)](docs/media/comartist-teaser.mp4)
+![ComArtist teaser: a brief becomes a comic chapter, with a Critic that catches continuity errors](docs/media/comartist-teaser.gif)
 
-▶ **[Watch the teaser](docs/media/comartist-teaser.mp4)**: what we're building, from a YAML brief to a
+▶ **[Full-quality version with sound (mp4)](docs/media/comartist-teaser.mp4)**: what we're building, from a YAML brief to a
 checked comic chapter. A Critic rejects continuity errors (wrong outfit, prop drift, location
 jumps) and asks for a retry before anything is accepted.
 
