@@ -143,6 +143,13 @@ particular provider or checkpoint.
 - Bound generation and revision attempts with explicit stop conditions and
   budgets. Surface exhausted retries and partial results without marking them
   accepted.
+- Panel revision policy: allow at most `max_panel_attempts` (default 3: one
+  initial attempt plus two retries) per panel, plus a hard per-chapter budget
+  (spend or image count). Route retries by failure category: rendering issues
+  (e.g. composition, style drift) retry generation; script mismatches or missing
+  characters go back to the Visual Director once. Stop early when the same
+  failure repeats. Keep the highest-scored attempt, not the last; when limits
+  are exhausted, surface it as not accepted. Keep both limits in configuration.
 - Record enough provenance to inspect a run: artifact IDs, model and prompt
   versions, conditioning references, attempts, critique, timing, and available
   cost data. Do not swallow errors or silently accept invalid output.

@@ -87,7 +87,7 @@ uv run streamlit run src/comartist/app.py
 The current implementation contains only core domain models and a basic input
 page. The architecture below describes the longer-term vision; AI agents,
 orchestration, generation, and persistence are not implemented yet. See
-[AGENTS.md](AGENTS.md) for the current five-agent implementation direction.
+[CLAUDE.md](CLAUDE.md) for the current five-agent implementation direction.
 
 > **An autonomous multi-agent system that turns ideas into coherent, evolving comic chapters.**
 
