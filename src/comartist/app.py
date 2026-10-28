@@ -6,6 +6,8 @@ import threading
 import pandas as pd
 import streamlit as st
 
+from comartist.adapters import ModelError, build_text_model
+from comartist.agents.story_architect import StoryArchitect
 from comartist.config import PROVIDERS, Settings
 from comartist.models import (
     ChapterRun,
@@ -166,8 +168,18 @@ def start_run(chapter_id: str, settings: RunSettings) -> None:
     run_settings = settings
     if not PROVIDERS[settings.provider].implemented:
         run_settings = settings.model_copy(update={"provider": "stub", "text_model": "stub-text", "image_model": "stub-image"})
+    story_architect = None
+    if run_settings.provider != "stub":
+        try:
+            story_architect = StoryArchitect(build_text_model(run_settings.provider, run_settings.text_model))
+        except ModelError as error:
+            st.session_state.start_error = str(error)
+            return
     threading.Thread(
-        target=run_stub_pipeline, args=(get_store(), chapter_id, run_settings), daemon=True
+        target=run_stub_pipeline,
+        args=(get_store(), chapter_id, run_settings),
+        kwargs={"story_architect": story_architect},
+        daemon=True,
     ).start()
 
 
@@ -230,6 +242,8 @@ def render_full_run(run: ChapterRun, settings: RunSettings) -> None:
     if st.button(label, key="run_full", disabled=running, width="stretch"):
         start_run(run.chapter_id, settings)
         st.rerun()
+    if error := st.session_state.pop("start_error", None):
+        st.error(f"Run not started: {error}")
     render_run_progress(run.chapter_id)
 
 
@@ -284,9 +298,42 @@ def render_overview(run: ChapterRun) -> None:
     )
     if run.settings and run.settings.provider == "stub":
         st.info("Stub run: outputs and token counts are simulated. No model was called.")
+    elif run.outline:
+        st.info("Story Architect ran on a real model; later stages are still simulated.")
+    if run.outline:
+        render_outline(run)
     if run.panels:
         render_comic_preview(run.panels)
         render_attempt_viewer(run.panels)
+
+
+def render_outline(run: ChapterRun) -> None:
+    outline = run.outline
+    st.subheader("Story outline")
+    st.markdown(f"*{html.escape(outline.logline)}*")
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "Page": beat.page,
+                    "What happens": beat.summary,
+                    "Characters": ", ".join(beat.characters),
+                    "Location": beat.location,
+                    "Emotion": beat.emotion,
+                    "Turn": beat.turn,
+                }
+                for beat in outline.beats
+            ]
+        ),
+        width="stretch",
+        hide_index=True,
+    )
+    if outline.proposed_facts:
+        st.markdown("**Proposed new facts** (candidates, not canon)")
+        for fact in outline.proposed_facts:
+            st.markdown(f"- {fact}")
+    if version := run.prompt_versions.get(Stage.STORY_ARCHITECT):
+        st.caption(f"Prompt: {version}")
 
 
 def panel_html(panel: PanelResult) -> str:

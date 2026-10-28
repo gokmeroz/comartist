@@ -8,6 +8,8 @@ called and the cost is $0. The real LangGraph workflow will replace this behind 
 import time
 from collections.abc import Callable
 
+from comartist.adapters import ModelError
+from comartist.agents.story_architect import StoryArchitect, StoryArchitectError
 from comartist.models import (
     ChapterRun,
     ChapterSpec,
@@ -80,11 +82,15 @@ def run_stub_pipeline(
     *,
     step_seconds: float = 0.6,
     sleep: Callable[[float], None] = time.sleep,
+    story_architect: StoryArchitect | None = None,
 ) -> ChapterRun:
+    """With `story_architect` set, that stage calls a real model; the rest stay simulated."""
     run = store.load(chapter_id)
     run.settings = settings
     run.state = RunState.RUNNING
     run.error = ""
+    run.outline = None
+    run.prompt_versions = {}
     run.panels = []
     run.log = [f"Run started with {settings.provider} / {settings.text_model}."]
     for status in run.stages.values():
@@ -107,12 +113,38 @@ def run_stub_pipeline(
         run.log.append(f"{name}: {detail}")
         store.save(run)
 
-    stage(
-        Stage.STORY_ARCHITECT,
-        f"{spec.target_pages} page beats",
-        1,
-        Cost(prompt_tokens=brief_tokens + 400, completion_tokens=150 * spec.target_pages, usd=0.0),
-    )
+    if story_architect is None:
+        stage(
+            Stage.STORY_ARCHITECT,
+            f"{spec.target_pages} page beats",
+            1,
+            Cost(prompt_tokens=brief_tokens + 400, completion_tokens=150 * spec.target_pages, usd=0.0),
+        )
+    else:
+        status = run.stages[Stage.STORY_ARCHITECT]
+        status.state = StageState.RUNNING
+        run.log.append(f"{Stage.STORY_ARCHITECT}: running ({settings.text_model})...")
+        store.save(run)
+        try:
+            result = story_architect.plan(spec)
+        except (StoryArchitectError, ModelError) as error:
+            status.state, status.detail = StageState.FAILED, "no valid outline"
+            if isinstance(error, StoryArchitectError):
+                status.attempts, status.cost = len(error.rejected), error.cost
+            run.state, run.error = RunState.FAILED, str(error)
+            run.log.append(f"{Stage.STORY_ARCHITECT}: FAILED - {error}")
+            store.save(run)
+            return run
+        run.outline = result.outline
+        run.prompt_versions[Stage.STORY_ARCHITECT] = result.prompt_version
+        status.state, status.attempts, status.cost = StageState.DONE, result.attempts, result.cost
+        status.detail = f"{len(result.outline.beats)} page beats ({result.provider})"
+        run.log.append(
+            f"{Stage.STORY_ARCHITECT}: {result.outline.logline} "
+            f"[{result.model}, {result.prompt_version}, attempt {result.attempts}]"
+        )
+        run.log.append("Later stages are still simulated (stub).")
+        store.save(run)
     stage(
         Stage.SCRIPT,
         f"{panels} panels scripted, approved on revision 2",
