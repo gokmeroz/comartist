@@ -1,9 +1,10 @@
 """Script Writer prompt. Bump VERSION whenever the wording changes; it is recorded per run."""
 
+from comartist.models.critique import ScriptCritique
 from comartist.models.run import ChapterSpec
 from comartist.models.story import StoryOutline
 
-VERSION = "script_writer/v1"
+VERSION = "script_writer/v2"
 
 SYSTEM = """\
 You are the Script Writer for a comic chapter. You turn a page-by-page outline into panels,
@@ -57,3 +58,14 @@ def user_message(spec: ChapterSpec, outline: StoryOutline) -> str:
 def repair_message(problems: list[str]) -> str:
     listed = "\n".join(f"- {problem}" for problem in problems)
     return f"Your script was rejected:\n{listed}\nReturn the corrected JSON object only."
+
+
+def revision_message(critique: ScriptCritique) -> str:
+    listed = "\n".join(
+        f"- [{issue.category}] {issue.panel_id or 'chapter'}: {issue.evidence} Repair: {issue.repair}"
+        for issue in critique.issues
+    )
+    return (
+        f"The Critic rejected this script:\n{listed}\n"
+        "Fix these failures, keep everything else, and return the full JSON object only."
+    )
