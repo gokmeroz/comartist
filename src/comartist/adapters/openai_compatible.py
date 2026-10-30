@@ -15,6 +15,7 @@ from typing import Any, Protocol
 from pydantic import SecretStr
 
 from comartist.adapters.base import (
+    ChatMessage,
     ImageRequest,
     ImageResult,
     ModelError,
