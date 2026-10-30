@@ -3,6 +3,7 @@
 Run from the repo root:
 
     uv run python scripts/smoke_script_loop.py             # cap $4.00
+    uv run python scripts/smoke_script_loop.py --seed-flaw # force a real revision
 
 Saves `smoke_results/<UTC timestamp>-script-loop/`: `brief.yaml`, `summary.json` (every draft,
 critique, cost, and prompt version) and `script.md` (the best draft and its verdict).
@@ -19,8 +20,23 @@ from comartist.agents.critic import Critic
 from comartist.agents.script_writer import ScriptWriter
 from comartist.agents.story_architect import StoryArchitect, StoryArchitectError
 from comartist.config import PROVIDERS, MetaSettings
+from comartist.models import DialogueLine
 from comartist.workflows.script_loop import ScriptLoop, ScriptLoopError
 from comartist.workflows.store import chapter_template, parse_brief
+
+FLAW = "We saw each other last year, remember?"  # contradicts the template's canon
+
+
+class FlawedFirstDraft(ScriptWriter):
+    """Plants a canon violation in the first draft, to exercise a real rejection and revision."""
+
+    def write(self, spec, outline):
+        result = super().write(spec, outline)
+        panel = result.script.panels[-1]
+        speaker = panel.characters[0] if panel.characters else spec.characters[0]
+        panel.dialogue.append(DialogueLine(speaker=speaker, text=FLAW))
+        return result
+
 
 RESULTS_DIR = Path("smoke_results")
 MAX_DRAFTS = 3
@@ -40,6 +56,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--brief", type=Path, help="YAML brief (default: the chapter template)")
     parser.add_argument("--cap-usd", type=float, default=4.0)
+    parser.add_argument("--seed-flaw", action="store_true", help="Plant a canon violation in draft 1")
     args = parser.parse_args()
 
     if not PROVIDERS["meta"].key_present():
@@ -56,9 +73,10 @@ def main() -> int:
     out.mkdir(parents=True)
     (out / "brief.yaml").write_text(brief_text)
     model = build_text_model("meta", "Muse Wonder")
+    writer = FlawedFirstDraft(model) if args.seed_flaw else ScriptWriter(model)
     try:
         planned = StoryArchitect(model).plan(spec)
-        result = ScriptLoop(ScriptWriter(model), Critic(model), MAX_DRAFTS).run(spec, planned.outline)
+        result = ScriptLoop(writer, Critic(model), MAX_DRAFTS).run(spec, planned.outline)
     except (StoryArchitectError, ScriptLoopError, ModelError) as error:
         (out / "summary.json").write_text(json.dumps({"ok": False, "error": str(error)}, indent=2))
         print(f"FAILED: {error} -> {out}")

@@ -83,6 +83,7 @@ def render_sidebar() -> RunSettings:
         "Max attempts per panel", min_value=1, max_value=10, value=3,
         help="1 initial try + retries. Lower it while developing to save credits.",
     )
+    max_script_attempts = st.sidebar.number_input("Max drafts per script", min_value=1, max_value=10, value=3)
     budget = st.sidebar.number_input(
         "Chapter budget (USD)", min_value=0.5, max_value=150.0, value=5.0, step=0.5,
         help="Hard cap per run. When it runs out, the best attempts so far are shown, not accepted.",
@@ -92,6 +93,7 @@ def render_sidebar() -> RunSettings:
         provider=provider_id,
         text_model=text_model,
         image_model=image_model,
+        max_script_attempts=int(max_script_attempts),
         max_panel_attempts=int(max_attempts),
         chapter_budget_usd=float(budget),
     )
