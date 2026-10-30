@@ -23,6 +23,7 @@ from comartist.models import (
     Stage,
     StageState,
 )
+from comartist.workflows.panel_loop import PanelLoop
 from comartist.workflows.script_loop import ScriptLoop, ScriptLoopError
 from comartist.workflows.store import RunStore
 
@@ -92,6 +93,53 @@ def _stub_attempts(panel_index: int, max_attempts: int) -> list[PanelAttempt]:
     return attempts
 
 
+def _stub_panel_stage(store, run, settings, status, panels, step_seconds, sleep) -> None:
+    for number, panel in enumerate(run.panels):
+        panel.attempts = _stub_attempts(number, settings.max_panel_attempts)
+        tries = len(panel.attempts)
+        status.attempts += tries
+        status.cost = status.cost.add(
+            Cost(prompt_tokens=300 * tries, completion_tokens=60 * tries, images=tries, usd=0.0)
+        )
+        status.detail = f"{number + 1}/{panels} panels"
+        store.save(run)
+        sleep(step_seconds / PANELS_PER_PAGE)
+
+
+def _real_panels(store: RunStore, run: ChapterRun, settings: RunSettings, loop: PanelLoop) -> bool:
+    """Generate every panel. True means the run stopped early and has been marked so."""
+    status = run.stages[Stage.PANELS]
+    shots = {shot.panel_id: shot for shot in run.visual_plan.panels}
+    actions = {panel.panel_id: panel.action for panel in run.script.panels}
+    folder = store.root / run.chapter_id / "panels"
+    folder.mkdir(exist_ok=True)
+    for number, panel in enumerate(run.panels):
+        remaining = settings.chapter_budget_usd - (run.cost.usd or 0)
+        if remaining <= 0:
+            status.state, status.detail = StageState.FAILED, f"budget spent at {number}/{len(run.panels)} panels"
+            run.state, run.error = RunState.BUDGET_EXHAUSTED, "Chapter budget exhausted; finished panels are kept."
+            run.log.append(f"{Stage.PANELS}: {status.detail}")
+            store.save(run)
+            return True
+        result = loop.run(
+            run.spec, run.visual_plan, shots[panel.panel_id], actions[panel.panel_id], folder, remaining
+        )
+        panel.attempts = result.attempts
+        status.attempts += len(result.attempts)
+        status.cost = status.cost.add(result.cost)
+        status.detail = f"{number + 1}/{len(run.panels)} panels"
+        run.prompt_versions[Stage.PANELS] = ", ".join(sorted(result.prompt_versions))
+        run.log.append(f"{Stage.PANELS}: {panel.panel_id} {result.stop_reason} after {len(result.attempts)}")
+        store.save(run)
+        if result.error:
+            status.state, status.detail = StageState.FAILED, f"stopped at {panel.panel_id}"
+            run.state, run.error = RunState.FAILED, result.error
+            run.log.append(f"{Stage.PANELS}: FAILED - {result.error}")
+            store.save(run)
+            return True
+    return False
+
+
 def run_stub_pipeline(
     store: RunStore,
     chapter_id: str,
@@ -102,6 +150,7 @@ def run_stub_pipeline(
     story_architect: StoryArchitect | None = None,
     script_loop: ScriptLoop | None = None,
     visual_director: VisualDirector | None = None,
+    panel_loop: PanelLoop | None = None,
 ) -> ChapterRun:
     """Stages given an agent call a real model; the rest stay simulated.
 
@@ -251,16 +300,12 @@ def run_stub_pipeline(
     status = run.stages[Stage.PANELS]
     status.state = StageState.RUNNING
     run.log.append(f"{Stage.PANELS}: running...")
-    for number, panel in enumerate(run.panels):
-        panel.attempts = _stub_attempts(number, settings.max_panel_attempts)
-        tries = len(panel.attempts)
-        status.attempts += tries
-        status.cost = status.cost.add(
-            Cost(prompt_tokens=300 * tries, completion_tokens=60 * tries, images=tries, usd=0.0)
-        )
-        status.detail = f"{number + 1}/{panels} panels"
-        store.save(run)
-        sleep(step_seconds / PANELS_PER_PAGE)
+    if panel_loop is not None and run.visual_plan is not None and run.script is not None:
+        stopped = _real_panels(store, run, settings, panel_loop)
+        if stopped:
+            return run
+    else:
+        _stub_panel_stage(store, run, settings, status, panels, step_seconds, sleep)
     accepted = sum(panel.accepted for panel in run.panels)
     status.state = StageState.DONE
     status.detail = (

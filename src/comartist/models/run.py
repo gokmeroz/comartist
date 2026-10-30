@@ -84,6 +84,8 @@ class PanelAttempt(BaseModel):
     accepted: bool
     failure: str = Field(default="", description="Failure category, e.g. WRONG_OUTFIT.")
     note: str = ""
+    image: str = Field(default="", description="Saved image; empty for simulated attempts.")
+    score: float | None = None
 
 
 class PanelResult(BaseModel):
@@ -100,6 +102,14 @@ class PanelResult(BaseModel):
     @property
     def accepted(self) -> bool:
         return any(attempt.accepted for attempt in self.attempts)
+
+    @property
+    def best_image(self) -> str:
+        """The accepted image, else the highest-scored one. Never the last by default."""
+        real = [attempt for attempt in self.attempts if attempt.image]
+        if not real:
+            return ""
+        return max(real, key=lambda attempt: (attempt.accepted, attempt.score or 0)).image
 
 
 class StageStatus(BaseModel):

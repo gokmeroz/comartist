@@ -8,11 +8,12 @@ from pydantic import BaseModel, Field
 
 from comartist.adapters import ChatMessage, TextModel, TextRequest
 from comartist.agents.parsing import parse_json
-from comartist.models.critique import ScriptCritique
+from comartist.models.critique import PanelCritique, ScriptCritique
 from comartist.models.run import ChapterSpec, Cost
 from comartist.models.script import Script
 from comartist.models.story import StoryOutline
-from comartist.prompts import script_critic as prompt
+from comartist.models.visual import CharacterLook, PanelSpec
+from comartist.prompts import panel_critic, script_critic as prompt
 
 DEFAULT_MAX_ATTEMPTS = 2  # one reply plus one repair
 
@@ -23,6 +24,12 @@ class CriticResult(BaseModel):
     prompt_version: str
     provider: str
     model: str
+
+
+class PanelCriticResult(BaseModel):
+    critique: PanelCritique
+    cost: Cost
+    prompt_version: str
 
 
 class CriticError(Exception):
@@ -36,6 +43,42 @@ class Critic:
     def __init__(self, model: TextModel, max_attempts: int = DEFAULT_MAX_ATTEMPTS) -> None:
         self._model = model
         self._max_attempts = max_attempts
+
+    def review_panel(
+        self,
+        shot: PanelSpec,
+        action: str,
+        style: str,
+        looks: list[CharacterLook],
+        image: str,
+        references: list[str],
+    ) -> PanelCriticResult:
+        """`image` and `references` are URLs or data URLs; the panel is sent first."""
+        messages = [
+            ChatMessage(role="system", content=panel_critic.SYSTEM),
+            ChatMessage(role="user", content=panel_critic.user_message(shot, action, style, looks)),
+        ]
+        cost, rejected = Cost(), []
+        for _ in range(self._max_attempts):
+            reply = self._model.complete(
+                TextRequest(
+                    messages=messages,
+                    temperature=0.2,
+                    max_tokens=4000,
+                    json_mode=True,
+                    images=[image, *references],
+                )
+            )
+            cost = cost.add(reply.cost)
+            critique, problems = parse_json(reply.text, PanelCritique)
+            if critique is not None:
+                return PanelCriticResult(critique=critique, cost=cost, prompt_version=panel_critic.VERSION)
+            rejected.append(problems)
+            messages += [
+                ChatMessage(role="assistant", content=reply.text),
+                ChatMessage(role="user", content=panel_critic.repair_message(problems)),
+            ]
+        raise CriticError(rejected, cost)
 
     def review_script(self, spec: ChapterSpec, outline: StoryOutline, script: Script) -> CriticResult:
         messages = [

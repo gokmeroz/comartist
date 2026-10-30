@@ -1,9 +1,11 @@
 """Visual Director prompt. Bump VERSION whenever the wording changes; it is recorded per run."""
 
 from comartist.models.run import ChapterSpec
+from comartist.models.critique import PanelCritique
 from comartist.models.script import Script
+from comartist.models.visual import PanelSpec
 
-VERSION = "visual_director/v2"
+VERSION = "visual_director/v3"
 
 SYSTEM = """\
 You are the Visual Director for a comic chapter. You translate a finished script into shots.
@@ -27,6 +29,18 @@ Reply with a single JSON object and nothing else, in this shape:
      "lighting": "...", "setting": "...", "characters": ["Name"]}
   ]
 }"""
+
+
+REDIRECT_SYSTEM = """\
+You are the Visual Director repairing one comic panel the Critic says misses its script.
+Keep the action and the visible characters. Change the shot so the failure cannot recur.
+Reply with a single JSON object and nothing else, with these fields: panel_id, framing,
+composition, poses, lighting, setting, characters."""
+
+
+def redirect_message(shot: PanelSpec, action: str, critique: PanelCritique) -> str:
+    listed = "\n".join(f"- [{i.category}] {i.evidence} Repair: {i.repair}" for i in critique.issues)
+    return f"Script action: {action}\nCurrent shot: {shot.model_dump_json()}\nCritic failures:\n{listed}"
 
 
 def user_message(spec: ChapterSpec, script: Script) -> str:
