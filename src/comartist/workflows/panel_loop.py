@@ -94,7 +94,9 @@ class PanelLoop:
 
     def _generate(self, state: _State) -> dict:
         repairs = [issue.repair for issue in state.critique.issues] if state.critique else []
-        prompt = panel_image.build(state.shot, state.action, state.plan.style, self._looks(state), repairs)
+        prompt = panel_image.build(
+            state.shot, state.action, state.plan.style, self._looks(state), repairs, state.spec.location
+        )
         references = [
             ImageReference(image_url=url, caption=f"Approved reference for {name}:")
             for name, url in zip(state.shot.references, self._references(state))
@@ -117,7 +119,7 @@ class PanelLoop:
         try:
             result = self._critic.review_panel(
                 state.shot, state.action, state.plan.style, self._looks(state),
-                data_url(state.pending_image), self._references(state),
+                data_url(state.pending_image), self._references(state), state.spec.location,
             )
         except (CriticError, ModelError) as error:
             attempt = PanelAttempt(attempt=number, accepted=False, failure="CRITIC_ERROR", image=state.pending_image)

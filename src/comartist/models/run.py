@@ -154,6 +154,8 @@ class ChapterRun(BaseModel):
     reference_cost: Cost = Field(default_factory=Cost)
     prompt_versions: dict[str, str] = Field(default_factory=dict, description="Stage -> prompt version.")
     panels: list[PanelResult] = Field(default_factory=list)
+    pages: list[str] = Field(default_factory=list, description="Lettered page images.")
+    pdf: str = ""
     log: list[str] = Field(default_factory=list)
     error: str = ""
     created: datetime = Field(default_factory=_now)

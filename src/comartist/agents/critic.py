@@ -52,11 +52,12 @@ class Critic:
         looks: list[CharacterLook],
         image: str,
         references: list[str],
+        place: str = "",
     ) -> PanelCriticResult:
         """`image` and `references` are URLs or data URLs; the panel is sent first."""
         messages = [
             ChatMessage(role="system", content=panel_critic.SYSTEM),
-            ChatMessage(role="user", content=panel_critic.user_message(shot, action, style, looks)),
+            ChatMessage(role="user", content=panel_critic.user_message(shot, action, style, looks, place)),
         ]
         cost, rejected = Cost(), []
         for _ in range(self._max_attempts):

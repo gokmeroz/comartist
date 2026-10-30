@@ -25,6 +25,7 @@ class PanelFailure(StrEnum):
     ARTIFACT = "ARTIFACT"
     MISSING_CHARACTER = "MISSING_CHARACTER"
     SCRIPT_MISMATCH = "SCRIPT_MISMATCH"
+    WRONG_LOCATION = "WRONG_LOCATION"
 
 
 # These mean the shot itself is wrong, so the Visual Director repairs them, not a re-render.
