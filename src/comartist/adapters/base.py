@@ -18,6 +18,9 @@ class TextRequest(BaseModel):
     temperature: float = Field(default=0.7, ge=0, le=2)
     max_tokens: int = Field(default=4096, ge=1)  # includes hidden reasoning tokens
     json_mode: bool = False
+    images: list[str] = Field(
+        default_factory=list, description="URLs or data URLs attached to the last user message."
+    )
 
 
 class TextResult(BaseModel):

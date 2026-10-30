@@ -15,6 +15,7 @@ from typing import Any, Protocol
 from pydantic import SecretStr
 
 from comartist.adapters.base import (
+    ChatMessage,
     ImageRequest,
     ImageResult,
     ModelError,
@@ -132,12 +133,25 @@ class _Client:
         return ModelError(ModelErrorKind.BAD_RESPONSE, message, self.provider)
 
 
+def _input_images(request: TextRequest, message: ChatMessage) -> list[dict[str, Any]]:
+    if message is not request.messages[-1]:
+        return []
+    return [{"type": "input_image", "image_url": url} for url in request.images]
+
+
+def _chat_message(request: TextRequest, message: ChatMessage) -> dict[str, Any]:
+    if message is not request.messages[-1] or not request.images:
+        return message.model_dump()
+    images = [{"type": "image_url", "image_url": {"url": url}} for url in request.images]
+    return {"role": message.role, "content": [{"type": "text", "text": message.content}, *images]}
+
+
 class ResponsesText(_Client):
     def complete(self, request: TextRequest) -> TextResult:
         payload: dict[str, Any] = {
             "model": self.model,
             "input": [
-                {"role": m.role, "content": [{"type": "input_text", "text": m.content}]}
+                {"role": m.role, "content": [{"type": "input_text", "text": m.content}, *_input_images(request, m)]}
                 if m.role == "user"
                 else {"role": m.role, "content": m.content}
                 for m in request.messages
@@ -230,7 +244,7 @@ class ChatCompletionsText(_Client):
     def complete(self, request: TextRequest) -> TextResult:
         payload: dict[str, Any] = {
             "model": self.model,
-            "messages": [m.model_dump() for m in request.messages],
+            "messages": [_chat_message(request, m) for m in request.messages],
             "temperature": request.temperature,
             "max_tokens": request.max_tokens,
         }

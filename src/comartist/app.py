@@ -24,6 +24,7 @@ from comartist.models import (
 from comartist.ui.theme import apply_theme, cost_hud, pixel_bar
 from comartist.workflows.store import BriefError, RunStore, chapter_template, parse_brief
 from comartist.tools.character_sheets import approve_sheet, generate_sheet
+from comartist.workflows.panel_loop import PanelLoop, data_url
 from comartist.workflows.script_loop import ScriptLoop
 from comartist.workflows.stub_pipeline import run_stub_pipeline
 
@@ -175,12 +176,18 @@ def start_run(chapter_id: str, settings: RunSettings) -> None:
     run_settings = settings
     if not PROVIDERS[settings.provider].implemented:
         run_settings = settings.model_copy(update={"provider": "stub", "text_model": "stub-text", "image_model": "stub-image"})
-    story_architect = script_loop = visual_director = None
+    story_architect = script_loop = visual_director = panel_loop = None
     if run_settings.provider != "stub":
         try:
             text_model = build_text_model(run_settings.provider, run_settings.text_model)
             story_architect = StoryArchitect(text_model)
             visual_director = VisualDirector(text_model)
+            panel_loop = PanelLoop(
+                build_image_model(run_settings.provider, run_settings.image_model),
+                Critic(text_model),
+                visual_director,
+                run_settings.max_panel_attempts,
+            )
             script_loop = ScriptLoop(ScriptWriter(text_model), Critic(text_model), run_settings.max_script_attempts)
         except ModelError as error:
             st.session_state.start_error = str(error)
@@ -188,7 +195,7 @@ def start_run(chapter_id: str, settings: RunSettings) -> None:
     threading.Thread(
         target=run_stub_pipeline,
         args=(get_store(), chapter_id, run_settings),
-        kwargs={"story_architect": story_architect, "script_loop": script_loop, "visual_director": visual_director},
+        kwargs={"story_architect": story_architect, "script_loop": script_loop, "visual_director": visual_director, "panel_loop": panel_loop},
         daemon=True,
     ).start()
 
@@ -267,7 +274,7 @@ def render_overview(run: ChapterRun) -> None:
     metrics = st.columns(4)
     metrics[0].metric("Cost", fmt_usd(cost))
     metrics[1].metric("Tokens", f"{cost.total_tokens:,}")
-    metrics[2].metric("Images (simulated)", cost.images)
+    metrics[2].metric("Images", cost.images)
     metrics[3].metric("Pages", run.spec.target_pages)
 
     spec = run.spec
@@ -282,7 +289,7 @@ def render_overview(run: ChapterRun) -> None:
         st.markdown("**Canon**")
         for fact in spec.canon:
             st.markdown(f"- {fact}")
-        st.markdown(f"**Panels (simulated):** {panels.detail}")
+        st.markdown(f"**Panels:** {panels.detail}")
     if run.settings:
         st.caption(
             f"Provider: {run.settings.provider} · text: {run.settings.text_model} · "
@@ -309,7 +316,7 @@ def render_overview(run: ChapterRun) -> None:
     if run.settings and run.settings.provider == "stub":
         st.info("Stub run: outputs and token counts are simulated. No model was called.")
     elif run.outline:
-        st.info("Text stages ran on a real model. Images, panel verdicts, layout, and the Chapter Judge are simulated.")
+        st.info("Layout and the Chapter Judge are simulated; earlier stages used real models.")
     if run.outline:
         render_outline(run)
     if run.script_critique:
@@ -423,16 +430,21 @@ def panel_html(panel: PanelResult) -> str:
     caption = f'<div class="caption">{html.escape(panel.caption)}</div>' if panel.caption else ""
     bubble = f'<div class="bubble">{html.escape(panel.dialogue)}</div>' if panel.dialogue else ""
     rejected = "" if panel.accepted or final is None else " rejected"
+    if panel.best_image:
+        art = f'<img src="{html.escape(data_url(panel.best_image))}" alt="{html.escape(panel.description)}" style="width:100%;display:block">'
+    else:
+        art = f'<div class="art">{html.escape(panel.description)}</div>'
     return (
         f'<div class="panel{rejected}">{caption}'
-        f'<div class="art">{html.escape(panel.description)}</div>{bubble}'
+        f"{art}{bubble}"
         f'<div class="tag">{panel.panel_id} · {badge} {tries}</div></div>'
     )
 
 
 def render_comic_preview(panels: list[PanelResult]) -> None:
     st.subheader("Comic preview")
-    st.caption("Placeholder art until panel generation is wired in. Layout, captions, and dialogue are real.")
+    if not any(panel.best_image for panel in panels):
+        st.caption("Placeholder art: this run had no image model.")
     pages = sorted({panel.page for panel in panels})
     page = st.select_slider("Page", options=pages, format_func=lambda n: f"Page {n}") if len(pages) > 1 else pages[0]
     cells = "".join(panel_html(panel) for panel in panels if panel.page == page)
@@ -456,6 +468,8 @@ def render_attempt_viewer(panels: list[PanelResult]) -> None:
     st.markdown(f"**Script:** {panel.description}")
     cols = st.columns(max(len(panel.attempts), 1))
     for col, attempt in zip(cols, panel.attempts, strict=False):
+        if attempt.image:
+            col.image(attempt.image)
         verdict = "✅ accepted" if attempt.accepted else f"❌ {attempt.failure}"
         state = "done" if attempt.accepted else "failed"
         col.markdown(

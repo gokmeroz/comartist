@@ -10,7 +10,8 @@ from comartist.adapters import ChatMessage, TextModel, TextRequest
 from comartist.agents.parsing import parse_json
 from comartist.models.run import ChapterSpec, Cost
 from comartist.models.script import Script
-from comartist.models.visual import VisualPlan
+from comartist.models.critique import PanelCritique
+from comartist.models.visual import PanelSpec, VisualPlan
 from comartist.prompts import visual_director as prompt
 
 DEFAULT_MAX_ATTEMPTS = 2  # one draft plus one repair
@@ -85,6 +86,31 @@ class VisualDirector:
     def __init__(self, model: TextModel, max_attempts: int = DEFAULT_MAX_ATTEMPTS) -> None:
         self._model = model
         self._max_attempts = max_attempts
+
+    def redirect_panel(
+        self, shot: PanelSpec, action: str, critique: PanelCritique
+    ) -> tuple[PanelSpec, Cost]:
+        """Rewrite one shot the Critic says misses the script. Who is visible cannot change."""
+        messages = [
+            ChatMessage(role="system", content=prompt.REDIRECT_SYSTEM),
+            ChatMessage(role="user", content=prompt.redirect_message(shot, action, critique)),
+        ]
+        cost, rejected = Cost(), []
+        for _ in range(self._max_attempts):
+            reply = self._model.complete(
+                TextRequest(messages=messages, temperature=0.6, max_tokens=4000, json_mode=True)
+            )
+            cost = cost.add(reply.cost)
+            revised, problems = parse_json(reply.text, PanelSpec)
+            if revised is not None:
+                fixed = {"panel_id": shot.panel_id, "characters": shot.characters, "references": shot.references}
+                return revised.model_copy(update=fixed), cost
+            rejected.append(problems)
+            messages += [
+                ChatMessage(role="assistant", content=reply.text),
+                ChatMessage(role="user", content=prompt.repair_message(problems)),
+            ]
+        raise VisualDirectorError(rejected, cost)
 
     def plan(self, spec: ChapterSpec, script: Script) -> VisualDirectorResult:
         messages = [
