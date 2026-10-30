@@ -7,6 +7,7 @@ import pytest
 
 from comartist.adapters import ModelError, ModelErrorKind
 from comartist.adapters.fake import FakeTextModel
+from comartist.agents.critic import Critic
 from comartist.agents.script_writer import (
     ScriptWriter,
     ScriptWriterError,
@@ -25,6 +26,7 @@ from comartist.models import (
     StoryOutline,
 )
 from comartist.prompts import script_writer as prompt
+from comartist.workflows.script_loop import ScriptLoop
 from comartist.workflows.store import RunStore, chapter_template
 from comartist.workflows.stub_pipeline import run_stub_pipeline
 
@@ -151,20 +153,20 @@ def run_with(tmp_path: Path, replies: list) -> ChapterRun:
     settings = RunSettings(provider="meta", text_model="Muse Wonder", image_model="Muse Image")
     run_stub_pipeline(
         store, chapter_id, settings, step_seconds=0, sleep=lambda _: None,
-        story_architect=StoryArchitect(model), script_writer=ScriptWriter(model),
+        story_architect=StoryArchitect(model), script_loop=ScriptLoop(ScriptWriter(model), Critic(model)),
     )
     return store.load(chapter_id)
 
 
 def test_pipeline_uses_real_script(tmp_path: Path) -> None:
-    saved = run_with(tmp_path, ["script"])
+    saved = run_with(tmp_path, ["script", '{"approved": true, "score": 0.9}'])
 
     assert saved.state is RunState.DONE
     assert saved.script is not None
     assert [p.panel_id for p in saved.panels] == [p.panel_id for p in saved.script.panels]
     assert saved.panels[0].description == "Moment 1.1"
     assert saved.panels[0].dialogue.endswith(": Hey.")
-    assert saved.prompt_versions[Stage.SCRIPT] == prompt.VERSION
+    assert prompt.VERSION in saved.prompt_versions[Stage.SCRIPT]
 
 
 def test_pipeline_stops_when_script_writer_fails(tmp_path: Path) -> None:

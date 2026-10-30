@@ -9,6 +9,7 @@ description = "A foundation for coherent comic chapter generation."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "langgraph>=0.6,<2",
     "pydantic>=2,<3",
     "pydantic-settings>=2,<3",
     "python-dotenv>=1,<2",

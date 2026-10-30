@@ -9,7 +9,6 @@ import time
 from collections.abc import Callable
 
 from comartist.adapters import ModelError
-from comartist.agents.script_writer import ScriptWriter, ScriptWriterError
 from comartist.agents.story_architect import StoryArchitect, StoryArchitectError
 from comartist.models import (
     ChapterRun,
@@ -23,6 +22,7 @@ from comartist.models import (
     Stage,
     StageState,
 )
+from comartist.workflows.script_loop import ScriptLoop, ScriptLoopError
 from comartist.workflows.store import RunStore
 
 PANELS_PER_PAGE = 4
@@ -99,11 +99,11 @@ def run_stub_pipeline(
     step_seconds: float = 0.6,
     sleep: Callable[[float], None] = time.sleep,
     story_architect: StoryArchitect | None = None,
-    script_writer: ScriptWriter | None = None,
+    script_loop: ScriptLoop | None = None,
 ) -> ChapterRun:
     """Stages given an agent call a real model; the rest stay simulated.
 
-    `script_writer` needs an outline, so it only runs alongside `story_architect`.
+    `script_loop` needs an outline, so it only runs alongside `story_architect`.
     """
     run = store.load(chapter_id)
     run.settings = settings
@@ -111,6 +111,7 @@ def run_stub_pipeline(
     run.error = ""
     run.outline = None
     run.script = None
+    run.script_critique = None
     run.prompt_versions = {}
     run.panels = []
     run.log = [f"Run started with {settings.provider} / {settings.text_model}."]
@@ -165,7 +166,7 @@ def run_stub_pipeline(
             f"[{result.model}, {result.prompt_version}, attempt {result.attempts}]"
         )
         store.save(run)
-    if script_writer is None or run.outline is None:
+    if script_loop is None or run.outline is None:
         stage(
             Stage.SCRIPT,
             f"{panels} panels scripted, approved on revision 2",
@@ -179,24 +180,32 @@ def run_stub_pipeline(
         run.log.append(f"{Stage.SCRIPT}: running ({settings.text_model})...")
         store.save(run)
         try:
-            written = script_writer.write(spec, run.outline)
-        except (ScriptWriterError, ModelError) as error:
-            status.state, status.detail = StageState.FAILED, "no valid script"
-            if isinstance(error, ScriptWriterError):
-                status.attempts, status.cost = len(error.rejected), error.cost
+            written = script_loop.run(spec, run.outline)
+        except (ScriptLoopError, ModelError) as error:
+            status.state, status.detail = StageState.FAILED, "no reviewed script"
+            if isinstance(error, ScriptLoopError):
+                status.attempts, status.cost = len(error.drafts), error.cost
             run.state, run.error = RunState.FAILED, str(error)
             run.log.append(f"{Stage.SCRIPT}: FAILED - {error}")
             store.save(run)
             return run
-        run.script = written.script
+        run.script, run.script_critique = written.script, written.critique
+        run.prompt_versions[Stage.SCRIPT] = ", ".join(sorted(written.prompt_versions.values()))
+        status.attempts, status.cost = written.attempts, written.cost
+        if not written.approved:
+            status.state = StageState.FAILED
+            status.detail = f"not approved: {written.stop_reason}, best score {written.critique.score:.2f}"
+            run.state = RunState.FAILED
+            run.error = f"Script not approved after {written.attempts} drafts ({written.stop_reason})."
+            run.log.append(f"{Stage.SCRIPT}: {status.detail}")
+            store.save(run)
+            return run
         run.panels = _script_panels(written.script)
         panels = len(run.panels)
-        run.prompt_versions[Stage.SCRIPT] = written.prompt_version
-        status.state, status.attempts, status.cost = StageState.DONE, written.attempts, written.cost
-        status.detail = f"{panels} panels scripted, not yet critiqued ({written.provider})"
+        status.state = StageState.DONE
+        status.detail = f"{panels} panels approved on draft {written.attempts} ({written.provider})"
         run.log.append(
-            f"{Stage.SCRIPT}: {status.detail} "
-            f"[{written.model}, {written.prompt_version}, attempt {written.attempts}]"
+            f"{Stage.SCRIPT}: {status.detail} [{written.model}, {run.prompt_versions[Stage.SCRIPT]}]"
         )
     if story_architect is not None:
         run.log.append("Later stages are still simulated (stub).")

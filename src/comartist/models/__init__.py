@@ -2,6 +2,7 @@
 
 from comartist.models.chapter import ChapterBrief
 from comartist.models.character import Character
+from comartist.models.critique import ScriptCritique, ScriptFailure, ScriptIssue
 from comartist.models.run import (
     ChapterRun,
     ChapterSpec,
@@ -33,6 +34,9 @@ __all__ = [
     "RunState",
     "Scene",
     "Script",
+    "ScriptCritique",
+    "ScriptFailure",
+    "ScriptIssue",
     "ScriptPanel",
     "Stage",
     "StageState",

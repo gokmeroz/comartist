@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from comartist.adapters import ChatMessage, TextModel, TextRequest
 from comartist.agents.parsing import parse_json
+from comartist.models.critique import ScriptCritique
 from comartist.models.run import ChapterSpec, Cost
 from comartist.models.script import Script
 from comartist.models.story import StoryOutline
@@ -80,9 +81,27 @@ class ScriptWriter:
         self._max_attempts = max_attempts
 
     def write(self, spec: ChapterSpec, outline: StoryOutline) -> ScriptWriterResult:
+        return self._draft(spec, outline, [])
+
+    def revise(
+        self, spec: ChapterSpec, outline: StoryOutline, script: Script, critique: ScriptCritique
+    ) -> ScriptWriterResult:
+        return self._draft(
+            spec,
+            outline,
+            [
+                ChatMessage(role="assistant", content=script.model_dump_json()),
+                ChatMessage(role="user", content=prompt.revision_message(critique)),
+            ],
+        )
+
+    def _draft(
+        self, spec: ChapterSpec, outline: StoryOutline, revision: list[ChatMessage]
+    ) -> ScriptWriterResult:
         messages = [
             ChatMessage(role="system", content=prompt.SYSTEM),
             ChatMessage(role="user", content=prompt.user_message(spec, outline)),
+            *revision,
         ]
         cost, rejected = Cost(), []
         for attempt in range(1, self._max_attempts + 1):

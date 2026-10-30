@@ -5,6 +5,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+from comartist.models.critique import ScriptCritique
 from comartist.models.script import Script
 from comartist.models.story import StoryOutline
 
@@ -106,6 +107,7 @@ class RunSettings(BaseModel):
     provider: str
     text_model: str
     image_model: str
+    max_script_attempts: int = Field(default=3, ge=1, le=10)
     max_panel_attempts: int = Field(default=3, ge=1, le=10)
     chapter_budget_usd: float = Field(default=5.0, gt=0)
 
@@ -126,6 +128,7 @@ class ChapterRun(BaseModel):
     )
     outline: StoryOutline | None = None
     script: Script | None = None
+    script_critique: ScriptCritique | None = None
     prompt_versions: dict[str, str] = Field(default_factory=dict, description="Stage -> prompt version.")
     panels: list[PanelResult] = Field(default_factory=list)
     log: list[str] = Field(default_factory=list)
