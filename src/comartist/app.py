@@ -2,6 +2,7 @@
 
 import html
 import threading
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -316,15 +317,18 @@ def render_overview(run: ChapterRun) -> None:
     if run.settings and run.settings.provider == "stub":
         st.info("Stub run: outputs and token counts are simulated. No model was called.")
     elif run.outline:
-        st.info("Layout and the Chapter Judge are simulated; earlier stages used real models.")
+        st.info("The Chapter Judge is simulated; earlier stages used real models.")
     if run.outline:
         render_outline(run)
     if run.script_critique:
         render_critique(run)
     if run.visual_plan:
         render_visual_plan(run)
-    if run.panels:
+    if run.pages:
+        render_pages(run)
+    elif run.panels:
         render_comic_preview(run.panels)
+    if run.panels:
         render_attempt_viewer(run.panels)
 
 
@@ -439,6 +443,16 @@ def panel_html(panel: PanelResult) -> str:
         f"{art}{bubble}"
         f'<div class="tag">{panel.panel_id} · {badge} {tries}</div></div>'
     )
+
+
+def render_pages(run: ChapterRun) -> None:
+    st.subheader("Comic pages")
+    for page in run.pages:
+        st.image(page)
+    if run.pdf:
+        st.download_button(
+            "Download PDF", Path(run.pdf).read_bytes(), file_name=f"{run.chapter_id}.pdf", mime="application/pdf"
+        )
 
 
 def render_comic_preview(panels: list[PanelResult]) -> None:

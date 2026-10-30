@@ -23,6 +23,7 @@ from comartist.models import (
     Stage,
     StageState,
 )
+from comartist.tools.lettering import letter_chapter
 from comartist.workflows.panel_loop import PanelLoop
 from comartist.workflows.script_loop import ScriptLoop, ScriptLoopError
 from comartist.workflows.store import RunStore
@@ -167,6 +168,7 @@ def run_stub_pipeline(
     run.visual_plan = None
     run.prompt_versions = {}
     run.panels = []
+    run.pages, run.pdf = [], ""
     run.log = [f"Run started with {settings.provider} / {settings.text_model}."]
     for status in run.stages.values():
         status.state, status.detail, status.attempts, status.cost = StageState.PENDING, "", 0, Cost()
@@ -314,7 +316,15 @@ def run_stub_pipeline(
     )
     run.log.append(f"{Stage.PANELS}: {status.detail}")
     store.save(run)
-    stage(Stage.LAYOUT, f"{spec.target_pages} pages lettered", 1, Cost())
+    if run.panels and all(panel.best_image for panel in run.panels):
+        status = run.stages[Stage.LAYOUT]
+        run.pages, run.pdf = letter_chapter(run, store.root / run.chapter_id / "pages")
+        status.state, status.attempts = StageState.DONE, 1
+        status.detail = f"{len(run.pages)} pages lettered, PDF exported"
+        run.log.append(f"{Stage.LAYOUT}: {status.detail}")
+        store.save(run)
+    else:
+        stage(Stage.LAYOUT, f"{spec.target_pages} pages lettered", 1, Cost())
     stage(
         Stage.CHAPTER_JUDGE,
         "coherent sequence, no canon violations (stub)",
