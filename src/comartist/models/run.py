@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from comartist.models.critique import ScriptCritique
 from comartist.models.script import Script
 from comartist.models.story import StoryOutline
-from comartist.models.visual import VisualPlan
+from comartist.models.visual import CharacterLook, VisualPlan
 
 
 class ChapterSpec(BaseModel):
@@ -24,7 +24,10 @@ class ChapterSpec(BaseModel):
     target_pages: int = Field(default=4, ge=1, le=40)
     references: dict[str, str] = Field(
         default_factory=dict,
-        description="Character name -> approved reference image (URL or data URL).",
+        description="Character name -> approved reference image (file path or URL).",
+    )
+    locked_looks: list[CharacterLook] = Field(
+        default_factory=list, description="Looks approved with a reference; visual plans keep them."
     )
 
 
@@ -135,6 +138,10 @@ class ChapterRun(BaseModel):
     script: Script | None = None
     script_critique: ScriptCritique | None = None
     visual_plan: VisualPlan | None = None
+    reference_drafts: dict[str, str] = Field(
+        default_factory=dict, description="Character -> generated sheet awaiting approval."
+    )
+    reference_cost: Cost = Field(default_factory=Cost)
     prompt_versions: dict[str, str] = Field(default_factory=dict, description="Stage -> prompt version.")
     panels: list[PanelResult] = Field(default_factory=list)
     log: list[str] = Field(default_factory=list)
@@ -144,7 +151,7 @@ class ChapterRun(BaseModel):
 
     @property
     def cost(self) -> Cost:
-        total = Cost()
+        total = self.reference_cost
         for status in self.stages.values():
             total = total.add(status.cost)
         return total
