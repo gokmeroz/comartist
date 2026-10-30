@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from comartist.adapters import ModelError, build_text_model
+from comartist.agents.script_writer import ScriptWriter
 from comartist.agents.story_architect import StoryArchitect
 from comartist.config import PROVIDERS, Settings
 from comartist.models import (
@@ -168,17 +169,18 @@ def start_run(chapter_id: str, settings: RunSettings) -> None:
     run_settings = settings
     if not PROVIDERS[settings.provider].implemented:
         run_settings = settings.model_copy(update={"provider": "stub", "text_model": "stub-text", "image_model": "stub-image"})
-    story_architect = None
+    story_architect = script_writer = None
     if run_settings.provider != "stub":
         try:
-            story_architect = StoryArchitect(build_text_model(run_settings.provider, run_settings.text_model))
+            text_model = build_text_model(run_settings.provider, run_settings.text_model)
+            story_architect, script_writer = StoryArchitect(text_model), ScriptWriter(text_model)
         except ModelError as error:
             st.session_state.start_error = str(error)
             return
     threading.Thread(
         target=run_stub_pipeline,
         args=(get_store(), chapter_id, run_settings),
-        kwargs={"story_architect": story_architect},
+        kwargs={"story_architect": story_architect, "script_writer": script_writer},
         daemon=True,
     ).start()
 
