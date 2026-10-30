@@ -10,6 +10,7 @@ from comartist.adapters import ModelError, build_text_model
 from comartist.agents.critic import Critic
 from comartist.agents.script_writer import ScriptWriter
 from comartist.agents.story_architect import StoryArchitect
+from comartist.agents.visual_director import VisualDirector
 from comartist.config import PROVIDERS, Settings
 from comartist.models import (
     ChapterRun,
@@ -173,11 +174,12 @@ def start_run(chapter_id: str, settings: RunSettings) -> None:
     run_settings = settings
     if not PROVIDERS[settings.provider].implemented:
         run_settings = settings.model_copy(update={"provider": "stub", "text_model": "stub-text", "image_model": "stub-image"})
-    story_architect = script_loop = None
+    story_architect = script_loop = visual_director = None
     if run_settings.provider != "stub":
         try:
             text_model = build_text_model(run_settings.provider, run_settings.text_model)
             story_architect = StoryArchitect(text_model)
+            visual_director = VisualDirector(text_model)
             script_loop = ScriptLoop(ScriptWriter(text_model), Critic(text_model), run_settings.max_script_attempts)
         except ModelError as error:
             st.session_state.start_error = str(error)
@@ -185,7 +187,7 @@ def start_run(chapter_id: str, settings: RunSettings) -> None:
     threading.Thread(
         target=run_stub_pipeline,
         args=(get_store(), chapter_id, run_settings),
-        kwargs={"story_architect": story_architect, "script_loop": script_loop},
+        kwargs={"story_architect": story_architect, "script_loop": script_loop, "visual_director": visual_director},
         daemon=True,
     ).start()
 
@@ -264,7 +266,7 @@ def render_overview(run: ChapterRun) -> None:
     metrics = st.columns(4)
     metrics[0].metric("Cost", fmt_usd(cost))
     metrics[1].metric("Tokens", f"{cost.total_tokens:,}")
-    metrics[2].metric("Images generated", cost.images)
+    metrics[2].metric("Images (simulated)", cost.images)
     metrics[3].metric("Pages", run.spec.target_pages)
 
     spec = run.spec
@@ -276,10 +278,10 @@ def render_overview(run: ChapterRun) -> None:
         if spec.tone:
             st.markdown(f"**Tone:** {', '.join(spec.tone)}")
     with right:
-        st.markdown("**Canon respected**")
+        st.markdown("**Canon**")
         for fact in spec.canon:
             st.markdown(f"- {fact}")
-        st.markdown(f"**Panels:** {panels.detail}")
+        st.markdown(f"**Panels (simulated):** {panels.detail}")
     if run.settings:
         st.caption(
             f"Provider: {run.settings.provider} · text: {run.settings.text_model} · "
@@ -306,12 +308,56 @@ def render_overview(run: ChapterRun) -> None:
     if run.settings and run.settings.provider == "stub":
         st.info("Stub run: outputs and token counts are simulated. No model was called.")
     elif run.outline:
-        st.info("Story Architect ran on a real model; later stages are still simulated.")
+        st.info("Text stages ran on a real model. Images, panel verdicts, layout, and the Chapter Judge are simulated.")
     if run.outline:
         render_outline(run)
+    if run.script_critique:
+        render_critique(run)
+    if run.visual_plan:
+        render_visual_plan(run)
     if run.panels:
         render_comic_preview(run.panels)
         render_attempt_viewer(run.panels)
+
+
+def render_critique(run: ChapterRun) -> None:
+    critique = run.script_critique
+    st.subheader("Script critique")
+    verdict = "Approved" if critique.approved else "Not approved"
+    st.markdown(f"**{verdict}** · score {critique.score:.2f} (uncalibrated estimate)")
+    for issue in critique.issues:
+        where = issue.panel_id or "chapter"
+        st.markdown(f"- **{issue.category}** ({where}): {issue.evidence} *Repair:* {issue.repair}")
+    if version := run.prompt_versions.get(Stage.SCRIPT):
+        st.caption(f"Prompts: {version}")
+
+
+def render_visual_plan(run: ChapterRun) -> None:
+    plan = run.visual_plan
+    st.subheader("Visual plan")
+    st.markdown(f"**Style:** {plan.style}")
+    for look in plan.looks:
+        st.markdown(f"- **{look.name}:** {look.appearance} Outfit: {look.outfit}")
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "Panel": panel.panel_id,
+                    "Framing": panel.framing,
+                    "Composition": panel.composition,
+                    "Poses": panel.poses,
+                    "Lighting": panel.lighting,
+                    "Setting": panel.setting,
+                    "References": ", ".join(panel.references),
+                }
+                for panel in plan.panels
+            ]
+        ),
+        width="stretch",
+        hide_index=True,
+    )
+    if version := run.prompt_versions.get(Stage.VISUAL_DIRECTOR):
+        st.caption(f"Prompt: {version}")
 
 
 def render_outline(run: ChapterRun) -> None:
