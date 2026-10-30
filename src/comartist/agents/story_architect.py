@@ -5,11 +5,10 @@ The model's JSON is validated against `StoryOutline`, then checked deterministic
 still invalid the agent raises with every problem it saw, rather than passing it on.
 """
 
-import json
-
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
 from comartist.adapters import ChatMessage, TextModel, TextRequest
+from comartist.agents.parsing import parse_json
 from comartist.models.run import ChapterSpec, Cost
 from comartist.models.story import StoryOutline
 from comartist.prompts import story_architect as prompt
@@ -37,24 +36,8 @@ class StoryArchitectError(Exception):
         self.cost = cost
 
 
-def _strip_fences(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else ""
-        text = text.rsplit("```", 1)[0]
-    return text.strip()
-
-
 def parse_outline(text: str) -> tuple[StoryOutline | None, list[str]]:
-    try:
-        return StoryOutline.model_validate(json.loads(_strip_fences(text))), []
-    except json.JSONDecodeError as error:
-        return None, [f"Not valid JSON: {error.msg} at position {error.pos}"]
-    except ValidationError as error:
-        return None, [
-            f"{'.'.join(str(part) for part in issue['loc']) or 'root'}: {issue['msg']}"
-            for issue in error.errors()
-        ]
+    return parse_json(text, StoryOutline)
 
 
 def check_outline(outline: StoryOutline, spec: ChapterSpec) -> list[str]:

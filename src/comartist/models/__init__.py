@@ -14,6 +14,7 @@ from comartist.models.run import (
     StageState,
     StageStatus,
 )
+from comartist.models.script import DialogueLine, Scene, Script, ScriptPanel
 from comartist.models.state import ComicState
 from comartist.models.story import PageBeat, StoryOutline
 
@@ -24,11 +25,15 @@ __all__ = [
     "Character",
     "ComicState",
     "Cost",
+    "DialogueLine",
     "PanelAttempt",
     "PageBeat",
     "PanelResult",
     "RunSettings",
     "RunState",
+    "Scene",
+    "Script",
+    "ScriptPanel",
     "Stage",
     "StageState",
     "StageStatus",

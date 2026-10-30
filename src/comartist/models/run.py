@@ -5,6 +5,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+from comartist.models.script import Script
 from comartist.models.story import StoryOutline
 
 
@@ -124,6 +125,7 @@ class ChapterRun(BaseModel):
         default_factory=lambda: {stage: StageStatus() for stage in Stage}
     )
     outline: StoryOutline | None = None
+    script: Script | None = None
     prompt_versions: dict[str, str] = Field(default_factory=dict, description="Stage -> prompt version.")
     panels: list[PanelResult] = Field(default_factory=list)
     log: list[str] = Field(default_factory=list)

@@ -9,6 +9,7 @@ import time
 from collections.abc import Callable
 
 from comartist.adapters import ModelError
+from comartist.agents.script_writer import ScriptWriter, ScriptWriterError
 from comartist.agents.story_architect import StoryArchitect, StoryArchitectError
 from comartist.models import (
     ChapterRun,
@@ -18,6 +19,7 @@ from comartist.models import (
     PanelResult,
     RunSettings,
     RunState,
+    Script,
     Stage,
     StageState,
 )
@@ -63,6 +65,20 @@ def _stub_panels(spec: ChapterSpec) -> list[PanelResult]:
     return panels
 
 
+def _script_panels(script: Script) -> list[PanelResult]:
+    return [
+        PanelResult(
+            panel_id=panel.panel_id,
+            page=panel.page,
+            index=panel.index,
+            description=panel.action,
+            caption=panel.caption,
+            dialogue="\n".join(f"{line.speaker}: {line.text}" for line in panel.dialogue),
+        )
+        for panel in script.panels
+    ]
+
+
 def _stub_attempts(panel_index: int, max_attempts: int) -> list[PanelAttempt]:
     needed = _stub_panel_attempts(panel_index, max_attempts=99)
     attempts = []
@@ -83,13 +99,18 @@ def run_stub_pipeline(
     step_seconds: float = 0.6,
     sleep: Callable[[float], None] = time.sleep,
     story_architect: StoryArchitect | None = None,
+    script_writer: ScriptWriter | None = None,
 ) -> ChapterRun:
-    """With `story_architect` set, that stage calls a real model; the rest stay simulated."""
+    """Stages given an agent call a real model; the rest stay simulated.
+
+    `script_writer` needs an outline, so it only runs alongside `story_architect`.
+    """
     run = store.load(chapter_id)
     run.settings = settings
     run.state = RunState.RUNNING
     run.error = ""
     run.outline = None
+    run.script = None
     run.prompt_versions = {}
     run.panels = []
     run.log = [f"Run started with {settings.provider} / {settings.text_model}."]
@@ -143,15 +164,42 @@ def run_stub_pipeline(
             f"{Stage.STORY_ARCHITECT}: {result.outline.logline} "
             f"[{result.model}, {result.prompt_version}, attempt {result.attempts}]"
         )
-        run.log.append("Later stages are still simulated (stub).")
         store.save(run)
-    stage(
-        Stage.SCRIPT,
-        f"{panels} panels scripted, approved on revision 2",
-        2,
-        Cost(prompt_tokens=2 * (brief_tokens + 900), completion_tokens=2 * 120 * panels, usd=0.0),
-    )
-    run.panels = _stub_panels(spec)
+    if script_writer is None or run.outline is None:
+        stage(
+            Stage.SCRIPT,
+            f"{panels} panels scripted, approved on revision 2",
+            2,
+            Cost(prompt_tokens=2 * (brief_tokens + 900), completion_tokens=2 * 120 * panels, usd=0.0),
+        )
+        run.panels = _stub_panels(spec)
+    else:
+        status = run.stages[Stage.SCRIPT]
+        status.state = StageState.RUNNING
+        run.log.append(f"{Stage.SCRIPT}: running ({settings.text_model})...")
+        store.save(run)
+        try:
+            written = script_writer.write(spec, run.outline)
+        except (ScriptWriterError, ModelError) as error:
+            status.state, status.detail = StageState.FAILED, "no valid script"
+            if isinstance(error, ScriptWriterError):
+                status.attempts, status.cost = len(error.rejected), error.cost
+            run.state, run.error = RunState.FAILED, str(error)
+            run.log.append(f"{Stage.SCRIPT}: FAILED - {error}")
+            store.save(run)
+            return run
+        run.script = written.script
+        run.panels = _script_panels(written.script)
+        panels = len(run.panels)
+        run.prompt_versions[Stage.SCRIPT] = written.prompt_version
+        status.state, status.attempts, status.cost = StageState.DONE, written.attempts, written.cost
+        status.detail = f"{panels} panels scripted, not yet critiqued ({written.provider})"
+        run.log.append(
+            f"{Stage.SCRIPT}: {status.detail} "
+            f"[{written.model}, {written.prompt_version}, attempt {written.attempts}]"
+        )
+    if story_architect is not None:
+        run.log.append("Later stages are still simulated (stub).")
     store.save(run)
     stage(
         Stage.VISUAL_DIRECTOR,
