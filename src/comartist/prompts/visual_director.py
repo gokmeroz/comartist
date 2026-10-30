@@ -3,7 +3,7 @@
 from comartist.models.run import ChapterSpec
 from comartist.models.script import Script
 
-VERSION = "visual_director/v1"
+VERSION = "visual_director/v2"
 
 SYSTEM = """\
 You are the Visual Director for a comic chapter. You translate a finished script into shots.
@@ -38,6 +38,9 @@ def user_message(spec: ChapterSpec, script: Script) -> str:
     if spec.canon:
         lines.append("Canon (must not be contradicted):")
         lines.extend(f"- {fact}" for fact in spec.canon)
+    if spec.locked_looks:
+        lines.append("Approved looks (use exactly as written):")
+        lines.extend(f"- {look.name}: {look.appearance} Outfit: {look.outfit}" for look in spec.locked_looks)
     lines += ["", "Script:"]
     for scene in script.scenes:
         lines.append(f"Scene at {scene.location}: {scene.summary}")

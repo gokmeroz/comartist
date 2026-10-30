@@ -76,7 +76,9 @@ def attach_references(plan: VisualPlan, spec: ChapterSpec) -> VisualPlan:
         )
         for panel in plan.panels
     ]
-    return plan.model_copy(update={"panels": panels})
+    locked = {look.name.casefold(): look for look in spec.locked_looks}
+    looks = [locked.get(look.name.casefold(), look) for look in plan.looks]
+    return plan.model_copy(update={"panels": panels, "looks": looks})
 
 
 class VisualDirector:

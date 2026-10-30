@@ -1,10 +1,11 @@
 """Visual Director: script alignment, bounded repair, and approved-reference handling."""
 
 import json
+from pathlib import Path
 
 import pytest
 
-from comartist.adapters.fake import FakeTextModel
+from comartist.adapters.fake import FakeImageModel, FakeTextModel
 from comartist.agents.script_writer import parse_script
 from comartist.agents.visual_director import (
     VisualDirector,
@@ -12,7 +13,9 @@ from comartist.agents.visual_director import (
     check_plan,
     parse_plan,
 )
-from comartist.models import ChapterSpec
+from comartist.models import ChapterSpec, CharacterLook
+from comartist.tools.character_sheets import approve_sheet, generate_sheet
+from comartist.workflows.store import RunStore, chapter_template
 
 SPEC = ChapterSpec(
     title="Roof", premise="A goodbye.", characters=["Matt", "Andy"], target_pages=1,
@@ -95,3 +98,43 @@ def test_gives_up_after_max_attempts() -> None:
     with pytest.raises(VisualDirectorError) as caught:
         VisualDirector(model, max_attempts=2).plan(SPEC, SCRIPT)
     assert len(caught.value.rejected) == 2 and len(model.requests) == 2
+
+
+def test_locked_look_overrides_the_model_and_reaches_the_prompt() -> None:
+    locked = CharacterLook(name="Matt", appearance="short", outfit="red coat")
+    spec = SPEC.model_copy(update={"locked_looks": [locked]})
+    model = FakeTextModel([plan_json()])
+    result = VisualDirector(model).plan(spec, SCRIPT)
+
+    assert result.plan.looks[0] == locked
+    assert "red coat" in model.requests[0].messages[1].content
+
+
+def test_sheet_stays_a_draft_until_approved(tmp_path: Path) -> None:
+    store = RunStore(tmp_path)
+    run = store.create(chapter_template())
+    look = CharacterLook(name="Matt", appearance="short", outfit="red coat")
+    model = FakeImageModel()
+
+    location = generate_sheet(model, store, run, look, "Ink")
+    saved = store.load(run.chapter_id)
+    assert Path(location).exists() and saved.reference_cost.images == 1
+    assert saved.spec.references == {} and saved.spec.locked_looks == []
+    assert "red coat" in model.requests[0].prompt
+
+    approve_sheet(store, saved, look)
+    saved = store.load(run.chapter_id)
+    assert saved.spec.references == {"Matt": location}
+    assert saved.spec.locked_looks == [look]
+
+
+def test_regenerating_keeps_the_approved_file(tmp_path: Path) -> None:
+    store = RunStore(tmp_path)
+    run = store.create(chapter_template())
+    look = CharacterLook(name="Matt", appearance="short", outfit="red coat")
+    first = generate_sheet(FakeImageModel(), store, run, look, "Ink")
+    approve_sheet(store, run, look)
+    second = generate_sheet(FakeImageModel(), store, run, look, "Ink")
+
+    assert first != second and Path(first).exists()
+    assert run.spec.references["Matt"] == first

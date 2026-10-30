@@ -6,7 +6,7 @@ import threading
 import pandas as pd
 import streamlit as st
 
-from comartist.adapters import ModelError, build_text_model
+from comartist.adapters import ModelError, build_image_model, build_text_model
 from comartist.agents.critic import Critic
 from comartist.agents.script_writer import ScriptWriter
 from comartist.agents.story_architect import StoryArchitect
@@ -23,6 +23,7 @@ from comartist.models import (
 )
 from comartist.ui.theme import apply_theme, cost_hud, pixel_bar
 from comartist.workflows.store import BriefError, RunStore, chapter_template, parse_brief
+from comartist.tools.character_sheets import approve_sheet, generate_sheet
 from comartist.workflows.script_loop import ScriptLoop
 from comartist.workflows.stub_pipeline import run_stub_pipeline
 
@@ -332,6 +333,31 @@ def render_critique(run: ChapterRun) -> None:
         st.caption(f"Prompts: {version}")
 
 
+def render_reference_sheets(run: ChapterRun) -> None:
+    st.markdown("**Character references**")
+    st.caption("Generate a sheet, then approve it. Approval locks the look for every later run.")
+    settings = run.settings
+    columns = st.columns(len(run.visual_plan.looks))
+    for column, look in zip(columns, run.visual_plan.looks):
+        draft = run.reference_drafts.get(look.name)
+        approved = run.spec.references.get(look.name)
+        with column:
+            st.markdown(f"**{look.name}**: {'✅ approved' if approved else 'not approved'}")
+            if draft or approved:
+                st.image(approved if approved and not draft else draft)
+            if st.button("Generate sheet", key=f"sheet-{look.name}"):
+                try:
+                    model = build_image_model(settings.provider, settings.image_model)
+                    generate_sheet(model, get_store(), run, look, run.visual_plan.style)
+                except ModelError as error:
+                    st.error(str(error))
+                else:
+                    st.rerun()
+            if draft and draft != approved and st.button("Approve", key=f"approve-{look.name}"):
+                approve_sheet(get_store(), run, look)
+                st.rerun()
+
+
 def render_visual_plan(run: ChapterRun) -> None:
     plan = run.visual_plan
     st.subheader("Visual plan")
@@ -356,6 +382,7 @@ def render_visual_plan(run: ChapterRun) -> None:
         width="stretch",
         hide_index=True,
     )
+    render_reference_sheets(run)
     if version := run.prompt_versions.get(Stage.VISUAL_DIRECTOR):
         st.caption(f"Prompt: {version}")
 
