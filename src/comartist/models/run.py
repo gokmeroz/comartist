@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from comartist.models.critique import ScriptCritique
 from comartist.models.script import Script
 from comartist.models.story import StoryOutline
+from comartist.models.visual import VisualPlan
 
 
 class ChapterSpec(BaseModel):
@@ -21,6 +22,10 @@ class ChapterSpec(BaseModel):
     premise: str = Field(min_length=1)
     tone: list[str] = Field(default_factory=list)
     target_pages: int = Field(default=4, ge=1, le=40)
+    references: dict[str, str] = Field(
+        default_factory=dict,
+        description="Character name -> approved reference image (URL or data URL).",
+    )
 
 
 class Stage(StrEnum):
@@ -129,6 +134,7 @@ class ChapterRun(BaseModel):
     outline: StoryOutline | None = None
     script: Script | None = None
     script_critique: ScriptCritique | None = None
+    visual_plan: VisualPlan | None = None
     prompt_versions: dict[str, str] = Field(default_factory=dict, description="Stage -> prompt version.")
     panels: list[PanelResult] = Field(default_factory=list)
     log: list[str] = Field(default_factory=list)

@@ -18,11 +18,13 @@ from comartist.models.run import (
 from comartist.models.script import DialogueLine, Scene, Script, ScriptPanel
 from comartist.models.state import ComicState
 from comartist.models.story import PageBeat, StoryOutline
+from comartist.models.visual import CharacterLook, PanelSpec, VisualPlan
 
 __all__ = [
     "ChapterBrief",
     "ChapterRun",
     "ChapterSpec",
+    "CharacterLook",
     "Character",
     "ComicState",
     "Cost",
@@ -30,6 +32,7 @@ __all__ = [
     "PanelAttempt",
     "PageBeat",
     "PanelResult",
+    "PanelSpec",
     "RunSettings",
     "RunState",
     "Scene",
@@ -42,4 +45,5 @@ __all__ = [
     "StageState",
     "StageStatus",
     "StoryOutline",
+    "VisualPlan",
 ]

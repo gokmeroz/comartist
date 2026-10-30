@@ -10,6 +10,7 @@ from collections.abc import Callable
 
 from comartist.adapters import ModelError
 from comartist.agents.story_architect import StoryArchitect, StoryArchitectError
+from comartist.agents.visual_director import VisualDirector, VisualDirectorError
 from comartist.models import (
     ChapterRun,
     ChapterSpec,
@@ -100,10 +101,12 @@ def run_stub_pipeline(
     sleep: Callable[[float], None] = time.sleep,
     story_architect: StoryArchitect | None = None,
     script_loop: ScriptLoop | None = None,
+    visual_director: VisualDirector | None = None,
 ) -> ChapterRun:
     """Stages given an agent call a real model; the rest stay simulated.
 
-    `script_loop` needs an outline, so it only runs alongside `story_architect`.
+    `script_loop` needs an outline and `visual_director` an approved script, so each runs
+    only when the stage before it was real.
     """
     run = store.load(chapter_id)
     run.settings = settings
@@ -112,6 +115,7 @@ def run_stub_pipeline(
     run.outline = None
     run.script = None
     run.script_critique = None
+    run.visual_plan = None
     run.prompt_versions = {}
     run.panels = []
     run.log = [f"Run started with {settings.provider} / {settings.text_model}."]
@@ -210,12 +214,40 @@ def run_stub_pipeline(
     if story_architect is not None:
         run.log.append("Later stages are still simulated (stub).")
     store.save(run)
-    stage(
-        Stage.VISUAL_DIRECTOR,
-        f"{panels} panel specs",
-        1,
-        Cost(prompt_tokens=brief_tokens + 80 * panels, completion_tokens=90 * panels, usd=0.0),
-    )
+    if visual_director is None or run.script is None:
+        stage(
+            Stage.VISUAL_DIRECTOR,
+            f"{panels} panel specs",
+            1,
+            Cost(prompt_tokens=brief_tokens + 80 * panels, completion_tokens=90 * panels, usd=0.0),
+        )
+    else:
+        status = run.stages[Stage.VISUAL_DIRECTOR]
+        status.state = StageState.RUNNING
+        run.log.append(f"{Stage.VISUAL_DIRECTOR}: running ({settings.text_model})...")
+        store.save(run)
+        try:
+            directed = visual_director.plan(spec, run.script)
+        except (VisualDirectorError, ModelError) as error:
+            status.state, status.detail = StageState.FAILED, "no valid visual plan"
+            if isinstance(error, VisualDirectorError):
+                status.attempts, status.cost = len(error.rejected), error.cost
+            run.state, run.error = RunState.FAILED, str(error)
+            run.log.append(f"{Stage.VISUAL_DIRECTOR}: FAILED - {error}")
+            store.save(run)
+            return run
+        run.visual_plan = directed.plan
+        run.prompt_versions[Stage.VISUAL_DIRECTOR] = directed.prompt_version
+        status.state, status.attempts, status.cost = StageState.DONE, directed.attempts, directed.cost
+        status.detail = f"{len(directed.plan.panels)} panel specs ({directed.provider})"
+        run.log.append(
+            f"{Stage.VISUAL_DIRECTOR}: {status.detail} "
+            f"[{directed.model}, {directed.prompt_version}, attempt {directed.attempts}]"
+        )
+        unreferenced = sorted(set(spec.characters) - set(spec.references))
+        if unreferenced:
+            run.log.append(f"{Stage.VISUAL_DIRECTOR}: no approved reference for {', '.join(unreferenced)}")
+        store.save(run)
     status = run.stages[Stage.PANELS]
     status.state = StageState.RUNNING
     run.log.append(f"{Stage.PANELS}: running...")

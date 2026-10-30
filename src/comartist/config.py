@@ -100,7 +100,7 @@ PROVIDERS: dict[str, ProviderOption] = {
         image_models=["Muse Image"],
         api_key_env="COMARTIST_META_API_KEY",
         implemented=True,
-        note="Primary provider ($150 credits). Story Architect is live; later stages are simulated.",
+        note="Primary provider ($150 credits). Story, script, Critic, and visual planning are live; images onward are simulated.",
     ),
     "fireworks": ProviderOption(
         label="Fireworks (Meta open weights)",
