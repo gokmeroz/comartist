@@ -245,7 +245,13 @@ def regenerate_panel(
     status.cost = status.cost.add(result.cost)
     if result.accepted:
         panel.attempts = result.attempts  # the note outranks the earlier, higher-scored image
-    run.log.append(f"{Stage.PANELS}: {panel_id} regenerated ({result.stop_reason}): {note}")
+    if result.error:
+        # Re-lettering and re-judging the old image would spend a judge call on nothing new.
+        run.state, run.error = RunState.FAILED, result.error
+        run.log.append(f"{Stage.PANELS}: {panel_id} regeneration FAILED, previous image kept - {result.error}")
+        store.save(run)
+        return run
+    run.log.append(f"{Stage.PANELS}: {panel_id} regenerated ({result.stop_reason}) with note: {note}")
     return _finish_real(store, run, settings, panel_loop, chapter_judge)
 
 

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from comartist.adapters.base import ModelError, ModelErrorKind
 from comartist.adapters.fake import FakeImageModel, FakeTextModel
 from comartist.agents.chapter_judge import ChapterJudge
 from comartist.agents.critic import Critic
@@ -101,3 +102,21 @@ def test_regenerate_uses_note_and_clears_old_verdict(tmp_path: Path) -> None:
     assert "Must fix: Keep the rain" in images.requests[0].prompt
     assert saved.panels[1].attempts[0].score == 0.5
     assert saved.verdict.summary == "Good." and saved.state is RunState.DONE
+
+
+def test_failed_regeneration_stops_before_judging(tmp_path: Path) -> None:
+    store = RunStore(tmp_path)
+    run = stopped_run(store, tmp_path)
+    old = run.panels[0].attempts
+    run.state = RunState.DONE
+    store.save(run)
+    text = FakeTextModel([])
+    images = FakeImageModel([ModelError(ModelErrorKind.TRANSIENT, "no network", "meta")])
+    loop = PanelLoop(images, Critic(text), VisualDirector(text))
+
+    regenerate_panel(store, run.chapter_id, SETTINGS, loop, ChapterJudge(text), "p1-1", "Keep the rain")
+    saved = store.load(run.chapter_id)
+
+    assert saved.state is RunState.FAILED and "no network" in saved.error
+    assert saved.panels[0].attempts == old and saved.verdict is None
+    assert "p1-1 regeneration FAILED" in saved.log[-1]
