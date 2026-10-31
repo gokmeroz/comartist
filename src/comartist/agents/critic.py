@@ -81,6 +81,29 @@ class Critic:
             ]
         raise CriticError(rejected, cost)
 
+    def locate_heads(self, image: str, characters: list[str]) -> tuple[dict[str, list[float]], Cost]:
+        """Find each visible head for lettering. Unusable replies give {} rather than a failure."""
+        reply = self._model.complete(
+            TextRequest(
+                messages=[
+                    ChatMessage(role="system", content=panel_critic.HEADS_SYSTEM),
+                    ChatMessage(role="user", content=f"Characters: {', '.join(characters)}"),
+                ],
+                temperature=0,
+                max_tokens=2000,
+                json_mode=True,
+                images=[image],
+            )
+        )
+        located, _ = parse_json(reply.text, panel_critic.HeadBoxes)
+        heads = located.heads if located else {}
+        valid = {
+            name: box
+            for name, box in heads.items()
+            if len(box) == 4 and 0 <= box[0] < box[2] <= 1 and 0 <= box[1] < box[3] <= 1
+        }
+        return valid, reply.cost
+
     def review_script(self, spec: ChapterSpec, outline: StoryOutline, script: Script) -> CriticResult:
         messages = [
             ChatMessage(role="system", content=prompt.SYSTEM),

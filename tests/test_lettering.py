@@ -1,10 +1,13 @@
 """Lettering and layout: bubble content, speaker positions, page composition, and export."""
 
+import json
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
+from comartist.adapters.fake import FakeTextModel
+from comartist.agents.critic import Critic
 from comartist.models import (
     ChapterRun,
     ChapterSpec,
@@ -82,3 +85,24 @@ def test_chapter_exports_pages_and_pdf(tmp_path: Path) -> None:
 def test_missing_image_is_an_error_not_a_blank_panel(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="p1-1"):
         letter_chapter(chapter(tmp_path, ""), tmp_path / "pages")
+
+
+def test_bubble_avoids_located_head(tmp_path: Path) -> None:
+    head = [0.1, 0.0, 0.5, 0.5]
+    panel = PANEL.model_copy(update={"caption": "", "dialogue": PANEL.dialogue[:1]})
+    source = art(tmp_path / "in.png")
+    out = Image.open(letter_panel(source, panel, SHOT, tmp_path / "out.png", heads={"Matt": head}))
+    original = Image.open(source).convert("RGB").resize(out.size)
+    w, h = out.size
+    box = (int(.1 * w) + 20, 0, int(.5 * w) - 20, int(.5 * h) - 20)  # a tail may touch the head's edge
+    assert out.crop(box).tobytes() == original.crop(box).tobytes()
+
+
+def test_locate_heads_drops_invalid_boxes() -> None:
+    reply = json.dumps({"heads": {"Matt": [0.1, 0.1, 0.3, 0.3], "Andy": [0.5, 0.5, 0.2, 2]}})
+    heads, _ = Critic(FakeTextModel([reply])).locate_heads("data:x", ["Matt", "Andy"])
+    assert heads == {"Matt": [0.1, 0.1, 0.3, 0.3]}
+
+
+def test_unreadable_head_reply_is_empty() -> None:
+    assert Critic(FakeTextModel(["nope"])).locate_heads("data:x", ["Matt"])[0] == {}

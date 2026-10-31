@@ -16,7 +16,7 @@ from comartist.adapters import ImageModel, ImageReference, ImageRequest, ModelEr
 from comartist.agents.critic import Critic, CriticError
 from comartist.agents.visual_director import VisualDirector, VisualDirectorError
 from comartist.models.critique import REDIRECT_FAILURES, PanelCritique
-from comartist.models.run import ChapterSpec, Cost, PanelAttempt
+from comartist.models.run import ChapterRun, ChapterSpec, Cost, PanelAttempt
 from comartist.models.visual import PanelSpec, VisualPlan
 from comartist.prompts import panel_image
 
@@ -82,6 +82,20 @@ class PanelLoop:
         )
         graph.add_conditional_edges("redirect", self._after_redirect, {"generate": "generate", END: END})
         self._graph = graph.compile()
+
+    def locate_heads(self, run: ChapterRun) -> Cost:
+        """Record head positions on each panel's best image, so lettering can avoid them."""
+        shots = {shot.panel_id: shot for shot in run.visual_plan.panels}
+        cost = Cost()
+        for panel in run.panels:
+            try:
+                panel.heads, spent = self._critic.locate_heads(
+                    data_url(panel.best_image), shots[panel.panel_id].characters
+                )
+            except ModelError:
+                continue  # lettering falls back to the shot's composition text
+            cost = cost.add(spent)
+        return cost
 
     @staticmethod
     def _looks(state: _State) -> list:

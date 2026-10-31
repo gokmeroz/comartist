@@ -98,6 +98,10 @@ class PanelResult(BaseModel):
     caption: str = ""
     dialogue: str = ""
     attempts: list[PanelAttempt] = Field(default_factory=list)
+    heads: dict[str, list[float]] = Field(
+        default_factory=dict,
+        description="Character -> head box [left, top, right, bottom], as fractions of the image.",
+    )
 
     @property
     def accepted(self) -> bool:
