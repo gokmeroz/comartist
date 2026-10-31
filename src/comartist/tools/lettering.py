@@ -12,6 +12,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 from comartist.models import ChapterRun, PanelResult, PanelSpec, ScriptPanel
+from comartist.tools.page_templates import PAGE_HEIGHT, PAGE_WIDTH, Slot, slots_for
 
 PANEL_WIDTH = 1200
 FONT_SIZE = 30
@@ -21,8 +22,8 @@ MAX_TAIL = 110
 TAIL_WIDTH = 22
 OUTLINE = 4
 MARGIN = 24
-PAGE_WIDTH = 2000
-GUTTER = 24
+PAGE_MARGIN = 60
+GUTTER = 28
 INK = (28, 24, 20)
 PAPER = (255, 255, 255)
 CAPTION_FILL = (250, 225, 140)
@@ -99,23 +100,40 @@ def _draw_bubble(draw: ImageDraw.ImageDraw, wrapped: str, box: Box, tip: tuple[f
     draw.multiline_text(center, wrapped, fill=INK, font=font, anchor="mm", align="center")
 
 
+def _cover(
+    image: Image.Image, size: tuple[int, int], heads: dict[str, list[float]]
+) -> tuple[Image.Image, dict[str, Box]]:
+    """Scale to fill `size`, cropping around the heads, and map their boxes to the result."""
+    scale = max(size[0] / image.width, size[1] / image.height)
+    scaled = image.resize((round(image.width * scale), round(image.height * scale)))
+    boxes = [
+        (b[0] * scaled.width, b[1] * scaled.height, b[2] * scaled.width, b[3] * scaled.height)
+        for b in heads.values()
+    ]
+    center_x = sum(b[0] + b[2] for b in boxes) / (2 * len(boxes)) if boxes else scaled.width / 2
+    center_y = sum(b[1] + b[3] for b in boxes) / (2 * len(boxes)) if boxes else scaled.height / 2
+    left = int(min(max(center_x - size[0] / 2, 0), scaled.width - size[0]))
+    top = int(min(max(center_y - size[1] / 2, 0), scaled.height - size[1]))
+    cropped = scaled.crop((left, top, left + size[0], top + size[1]))
+    mapped = {
+        name.casefold(): (b[0] - left, b[1] - top, b[2] - left, b[3] - top) for name, b in zip(heads, boxes)
+    }
+    return cropped, mapped
+
+
 def letter_panel(
     image_path: str,
     panel: ScriptPanel,
     shot: PanelSpec,
     out: Path,
-    width: int = PANEL_WIDTH,
+    size: tuple[int, int] = (PANEL_WIDTH, 800),
     heads: dict[str, list[float]] | None = None,
 ) -> Path:
     """Letter at the panel's final width, so text is the same size on every panel."""
-    image = Image.open(image_path).convert("RGB")
-    image = image.resize((width, image.height * width // image.width))
+    image, head_boxes = _cover(Image.open(image_path).convert("RGB"), size, heads or {})
     draw = ImageDraw.Draw(image)
     font = _font()
     w, h = image.size
-    head_boxes = {
-        name.casefold(): (box[0] * w, box[1] * h, box[2] * w, box[3] * h) for name, box in (heads or {}).items()
-    }
     # The gap keeps bubbles far enough from heads for a visible tail.
     blocked: list[Box] = [(b[0] - TAIL, b[1] - TAIL, b[2] + TAIL, b[3] + TAIL) for b in head_boxes.values()]
     if panel.caption:
@@ -152,36 +170,21 @@ def _tail_tip(box: Box, head: Box | None, x: float, y: float) -> tuple[float, fl
     return tip_x, tip_y
 
 
-def page_rows(panels: list) -> list[list]:
-    """Two columns; with an odd count the first panel runs the full width."""
-    remaining = list(panels)
-    rows = [[remaining.pop(0)]] if len(remaining) % 2 else []
-    return rows + [remaining[i : i + 2] for i in range(0, len(remaining), 2)]
+def _gutter_box(slot: Slot) -> tuple[int, int, int, int]:
+    """Pixel box for a slot, with a gutter inside the page margin."""
+    usable_w, usable_h = PAGE_WIDTH - 2 * PAGE_MARGIN, PAGE_HEIGHT - 2 * PAGE_MARGIN
+    left = PAGE_MARGIN + int(slot[0] * usable_w) + GUTTER // 2
+    top = PAGE_MARGIN + int(slot[1] * usable_h) + GUTTER // 2
+    return left, top, left + int(slot[2] * usable_w) - GUTTER, top + int(slot[3] * usable_h) - GUTTER
 
 
-def row_width(columns: int) -> int:
-    return (PAGE_WIDTH - GUTTER * (columns + 1)) // columns
-
-
-def compose_page(panels: list[Path], out: Path) -> Path:
-    rows = page_rows(panels)
-    sized = []
-    for row in rows:
-        width = row_width(len(row))
-        images = [Image.open(path) for path in row]
-        sized.append([image.resize((width, image.height * width // image.width)) for image in images])
-    height = GUTTER + sum(row[0].height + GUTTER for row in sized)
-    page = Image.new("RGB", (PAGE_WIDTH, height), PAPER)
-    y = GUTTER
-    for row in sized:
-        x = GUTTER
-        for image in row:
-            page.paste(image, (x, y))
-            ImageDraw.Draw(page).rectangle(
-                (x, y, x + image.width, y + image.height), outline=INK, width=OUTLINE + 2
-            )
-            x += image.width + GUTTER
-        y += row[0].height + GUTTER
+def compose_page(panels: list[Path], slots: list[Slot], out: Path) -> Path:
+    page = Image.new("RGB", (PAGE_WIDTH, PAGE_HEIGHT), PAPER)
+    draw = ImageDraw.Draw(page)
+    for path, slot in zip(panels, slots):
+        box = _gutter_box(slot)
+        page.paste(Image.open(path).resize((box[2] - box[0], box[3] - box[1])), box[:2])
+        draw.rectangle(box, outline=INK, width=OUTLINE + 2)
     page.save(out)
     return out
 
@@ -198,17 +201,21 @@ def letter_chapter(run: ChapterRun, folder: Path) -> tuple[list[str], str]:
     folder.mkdir(exist_ok=True)
     scripted = {panel.panel_id: panel for panel in run.script.panels}
     shots = {shot.panel_id: shot for shot in run.visual_plan.panels}
+    templates = {layout.page: layout.template for layout in run.visual_plan.layouts}
     pages = []
     for number in sorted({panel.page for panel in run.panels}):
-        lettered = [
-            letter_panel(
-                panel.best_image, scripted[panel.panel_id], shots[panel.panel_id],
-                folder / f"{panel.panel_id}.png", row_width(len(row)), panel.heads,
+        on_page = [panel for panel in run.panels if panel.page == number]
+        slots = slots_for(templates.get(number, ""), len(on_page))
+        lettered = []
+        for panel, slot in zip(on_page, slots):
+            box = _gutter_box(slot)
+            lettered.append(
+                letter_panel(
+                    panel.best_image, scripted[panel.panel_id], shots[panel.panel_id],
+                    folder / f"{panel.panel_id}.png", (box[2] - box[0], box[3] - box[1]), panel.heads,
+                )
             )
-            for row in page_rows([panel for panel in run.panels if panel.page == number])
-            for panel in row
-        ]
-        pages.append(compose_page(lettered, folder / f"page-{number}.png"))
+        pages.append(compose_page(lettered, slots, folder / f"page-{number}.png"))
     pdf = folder / "chapter.pdf"
     images = [Image.open(page).convert("RGB") for page in pages]
     images[0].save(pdf, save_all=True, append_images=images[1:])

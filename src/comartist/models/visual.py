@@ -19,10 +19,16 @@ class PanelSpec(BaseModel):
     lighting: str = Field(min_length=1)
     setting: str = Field(min_length=1, description="Visible environment.")
     characters: list[str] = Field(default_factory=list, description="Who is visible.")
+    size: str = Field(default="1024x1024", description="Set from the page template, never by the model.")
     references: list[str] = Field(
         default_factory=list,
         description="Characters with an approved reference. Set from the brief, never by the model.",
     )
+
+
+class PageLayout(BaseModel):
+    page: int = Field(ge=1)
+    template: str = Field(min_length=1)
 
 
 class VisualPlan(BaseModel):
@@ -30,4 +36,5 @@ class VisualPlan(BaseModel):
 
     style: str = Field(min_length=1, description="One art style for the whole chapter.")
     looks: list[CharacterLook] = Field(min_length=1)
+    layouts: list[PageLayout] = Field(default_factory=list)
     panels: list[PanelSpec] = Field(min_length=1)

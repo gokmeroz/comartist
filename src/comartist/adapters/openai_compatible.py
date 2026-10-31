@@ -225,7 +225,14 @@ class ResponsesImage(_Client):
                 content.append({"type": "input_image", "image_url": ref.image_url})
             content.append({"type": "input_text", "text": request.prompt})
             prompt = [{"role": "user", "content": content}]
-        body, latency = self._post("/responses", {"model": self.model, "input": prompt})
+        body, latency = self._post(
+            "/responses",
+            {
+                "model": self.model,
+                "input": prompt,
+                "tools": [{"type": "image_generation", "size": request.size}],
+            },
+        )
         image_b64, url = _find_image(body)
         if not image_b64 and not url:
             raise self._bad(f"No image in response (keys: {sorted(body)})")

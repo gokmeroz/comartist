@@ -116,7 +116,7 @@ class PanelLoop:
             for name, url in zip(state.shot.references, self._references(state))
         ]
         try:
-            result = self._images.generate(ImageRequest(prompt=prompt, references=references))
+            result = self._images.generate(ImageRequest(prompt=prompt, references=references, size=state.shot.size))
         except ModelError as error:
             return {"error": str(error), "stop_reason": PanelStop.ERROR}
         number = len(state.attempts) + 1

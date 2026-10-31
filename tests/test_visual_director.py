@@ -138,3 +138,20 @@ def test_regenerating_keeps_the_approved_file(tmp_path: Path) -> None:
 
     assert first != second and Path(first).exists()
     assert run.spec.references["Matt"] == first
+
+
+def test_style_is_fixed_and_layout_sets_panel_size() -> None:
+    result = VisualDirector(FakeTextModel([plan_json()])).plan(SPEC, SCRIPT)
+    assert "American superhero comic" in result.plan.style
+    custom = SPEC.model_copy(update={"art_style": "Noir"})
+    assert VisualDirector(FakeTextModel([plan_json()])).plan(custom, SCRIPT).plan.style == "Noir"
+
+
+def test_layout_with_wrong_panel_count_is_rejected() -> None:
+    three = SCRIPT.model_copy(deep=True)
+    third = three.scenes[0].panels[1].model_copy(update={"index": 3})
+    three.scenes[0].panels.append(third)
+    plan = json.loads(plan_json([shot("p1-1", ["Matt"]), shot("p1-2", ["Matt", "Andy"]), shot("p1-3", ["Matt", "Andy"])]))
+    plan["layouts"] = [{"page": 1, "template": "offset_grid"}]
+    parsed, _ = parse_plan(json.dumps(plan))
+    assert any("choose a layout" in p for p in check_plan(parsed, three))

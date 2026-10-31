@@ -26,6 +26,7 @@ class ChapterSpec(BaseModel):
         default_factory=dict,
         description="Character name -> approved reference image (file path or URL).",
     )
+    art_style: str = Field(default="", description="Overrides the default comic style.")
     locked_looks: list[CharacterLook] = Field(
         default_factory=list, description="Looks approved with a reference; visual plans keep them."
     )
