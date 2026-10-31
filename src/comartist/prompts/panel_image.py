@@ -2,7 +2,7 @@
 
 from comartist.models.visual import CharacterLook, PanelSpec
 
-VERSION = "panel_image/v2"
+VERSION = "panel_image/v3"
 
 
 def build(
@@ -10,7 +10,7 @@ def build(
 ) -> str:
     lines = [
         f"One comic panel. Style: {style}",
-        f"Action: {action}",
+        *([f"Action: {action}"] if action else []),
         f"Shot: {shot.framing}. {shot.composition}",
         f"Poses: {shot.poses}",
         f"Lighting: {shot.lighting}",
