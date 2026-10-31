@@ -1,5 +1,7 @@
 """Critic prompt, visual mode. Bump VERSION whenever the wording changes; it is recorded per run."""
 
+from pydantic import BaseModel
+
 from comartist.models.critique import PanelFailure
 from comartist.models.visual import CharacterLook, PanelSpec
 
@@ -21,6 +23,17 @@ Reply with a single JSON object and nothing else, in this shape:
 {{"approved": false, "score": 0.5, "issues": [
   {{"category": "COMPOSITION", "evidence": "...", "repair": "..."}}
 ]}}"""
+
+
+HEADS_SYSTEM = """\
+Locate each named character's head in the comic panel, hair included. Give boxes as
+[left, top, right, bottom], each a fraction of the image width or height from 0 to 1.
+Omit anyone not visible. Reply with a single JSON object and nothing else:
+{"heads": {"Name": [0.1, 0.2, 0.3, 0.4]}}"""
+
+
+class HeadBoxes(BaseModel):
+    heads: dict[str, list[float]]
 
 
 def user_message(

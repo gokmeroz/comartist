@@ -318,6 +318,8 @@ def run_stub_pipeline(
     store.save(run)
     if run.panels and all(panel.best_image for panel in run.panels):
         status = run.stages[Stage.LAYOUT]
+        if panel_loop is not None:
+            status.cost = panel_loop.locate_heads(run)
         run.pages, run.pdf = letter_chapter(run, store.root / run.chapter_id / "pages")
         status.state, status.attempts = StageState.DONE, 1
         status.detail = f"{len(run.pages)} pages lettered, PDF exported"
