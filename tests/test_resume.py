@@ -23,7 +23,7 @@ from comartist.models import (
 )
 from comartist.workflows.panel_loop import PanelLoop
 from comartist.workflows.store import RunStore, chapter_template
-from comartist.workflows.stub_pipeline import can_resume, resume_pipeline, run_guarded
+from comartist.workflows.stub_pipeline import can_resume, regenerate_panel, resume_pipeline, run_guarded
 
 SETTINGS = RunSettings(provider="meta", text_model="m", image_model="i")
 APPROVED = '{"approved": true, "score": 0.9}'
@@ -82,3 +82,22 @@ def test_crash_is_recorded_on_the_run(tmp_path: Path) -> None:
     run_guarded(explode, store, run.chapter_id)
     saved = store.load(run.chapter_id)
     assert saved.state is RunState.FAILED and "old code" in saved.error
+
+
+def test_regenerate_uses_note_and_clears_old_verdict(tmp_path: Path) -> None:
+    store = RunStore(tmp_path)
+    run = stopped_run(store, tmp_path)
+    run.panels[1].attempts = [PanelAttempt(attempt=1, accepted=True, image=run.panels[0].best_image, score=0.99)]
+    run.state = RunState.DONE
+    run.verdict = ChapterVerdict(approved=True, score=0.9, summary="Old.")
+    store.save(run)
+    text = FakeTextModel([APPROVED.replace("0.9", "0.5"), '{"heads": {}}', '{"heads": {}}', VERDICT])
+    images = FakeImageModel()
+    loop = PanelLoop(images, Critic(text), VisualDirector(text))
+
+    regenerate_panel(store, run.chapter_id, SETTINGS, loop, ChapterJudge(text), "p1-2", "Keep the rain")
+    saved = store.load(run.chapter_id)
+
+    assert "Must fix: Keep the rain" in images.requests[0].prompt
+    assert saved.panels[1].attempts[0].score == 0.5
+    assert saved.verdict.summary == "Good." and saved.state is RunState.DONE

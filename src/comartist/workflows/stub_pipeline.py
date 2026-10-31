@@ -218,6 +218,37 @@ def resume_pipeline(
     return _finish_real(store, run, settings, panel_loop, chapter_judge)
 
 
+def regenerate_panel(
+    store: RunStore,
+    chapter_id: str,
+    settings: RunSettings,
+    panel_loop: PanelLoop,
+    chapter_judge: ChapterJudge | None,
+    panel_id: str,
+    note: str,
+) -> ChapterRun:
+    """Redo one panel with a person's note, then re-letter and re-judge the chapter."""
+    run = store.load(chapter_id)
+    run.state, run.error, run.accepted, run.verdict = RunState.RUNNING, "", False, None
+    store.save(run)
+    panel = next(item for item in run.panels if item.panel_id == panel_id)
+    shot = next(item for item in run.visual_plan.panels if item.panel_id == panel_id)
+    action = next(item.action for item in run.script.panels if item.panel_id == panel_id)
+    folder = store.root / run.chapter_id / "panels"
+    folder.mkdir(parents=True, exist_ok=True)
+    result = panel_loop.run(
+        run.spec, run.visual_plan, shot, action, folder,
+        settings.chapter_budget_usd, [note],
+    )
+    status = run.stages[Stage.PANELS]
+    status.attempts += len(result.attempts)
+    status.cost = status.cost.add(result.cost)
+    if result.accepted:
+        panel.attempts = result.attempts  # the note outranks the earlier, higher-scored image
+    run.log.append(f"{Stage.PANELS}: {panel_id} regenerated ({result.stop_reason}): {note}")
+    return _finish_real(store, run, settings, panel_loop, chapter_judge)
+
+
 def run_guarded(pipeline: Callable[..., ChapterRun], store: RunStore, chapter_id: str, *args, **kwargs) -> None:
     """Thread entry point: a crash must show up on the run, never vanish with the thread."""
     try:
