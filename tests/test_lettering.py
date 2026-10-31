@@ -133,3 +133,18 @@ def test_locate_heads_drops_invalid_boxes() -> None:
 
 def test_unreadable_head_reply_is_empty() -> None:
     assert Critic(FakeTextModel(["nope"])).locate_heads("data:x", LOOKS)[0] == {}
+
+
+def test_bubbles_follow_dialogue_order_even_when_speakers_are_reversed() -> None:
+    from comartist.tools.lettering import _place
+
+    first = _place((200, 80), (1200, 800), (900, 300), [])
+    second = _place((200, 80), (1200, 800), (200, 300), [first], first)
+    assert second[1] > first[1]
+    assert second[0] >= first[0] or second[1] >= first[3]
+
+
+def test_comic_font_has_the_long_dash(tmp_path: Path) -> None:
+    from comartist.tools.lettering import _font
+
+    assert _font().getmask("—").getbbox() is not None

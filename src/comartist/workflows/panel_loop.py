@@ -6,6 +6,7 @@ failure, or when the budget runs out; unaccepted attempts are kept but never mar
 """
 
 import base64
+import time
 from enum import StrEnum
 from pathlib import Path
 
@@ -47,6 +48,7 @@ class _State(BaseModel):
     action: str
     folder: Path
     budget_usd: float
+    notes: list[str] = Field(default_factory=list)
     attempts: list[PanelAttempt] = Field(default_factory=list)
     critique: PanelCritique | None = None
     pending_image: str = ""
@@ -114,6 +116,7 @@ class PanelLoop:
 
     def _generate(self, state: _State) -> dict:
         repairs = [issue.repair for issue in state.critique.issues] if state.critique else []
+        repairs += state.notes
         prompt = panel_image.build(
             state.shot, "" if state.softened else state.action, state.plan.style, self._looks(state), repairs, state.spec.location
         )
@@ -129,7 +132,8 @@ class PanelLoop:
             return {"error": str(error), "stop_reason": PanelStop.ERROR}
         number = len(state.attempts) + 1
         if result.image_b64:
-            path = state.folder / f"{state.shot.panel_id}-a{number}.{result.mime_type.split('/')[-1]}"
+            revision = f"-n{len(state.notes)}-{time.time_ns()}" if state.notes else ""
+            path = state.folder / f"{state.shot.panel_id}-a{number}{revision}.{result.mime_type.split('/')[-1]}"
             path.write_bytes(base64.b64decode(result.image_b64))
             image = str(path)
         else:
@@ -225,11 +229,12 @@ class PanelLoop:
         return END if state.stop_reason else "generate"
 
     def run(
-        self, spec: ChapterSpec, plan: VisualPlan, shot: PanelSpec, action: str, folder: Path, budget_usd: float
+        self, spec: ChapterSpec, plan: VisualPlan, shot: PanelSpec, action: str, folder: Path, budget_usd: float,
+        notes: list[str] | None = None,
     ) -> PanelLoopResult:
         final = _State.model_validate(
             self._graph.invoke(
-                _State(spec=spec, plan=plan, shot=shot, action=action, folder=folder, budget_usd=budget_usd),
+                _State(spec=spec, plan=plan, shot=shot, action=action, folder=folder, budget_usd=budget_usd, notes=notes or []),
                 {"recursion_limit": 3 * self._max_attempts + 6},
             )
         )

@@ -15,7 +15,8 @@ from comartist.models import ChapterRun, PanelResult, PanelSpec, ScriptPanel
 from comartist.tools.page_templates import PAGE_HEIGHT, PAGE_WIDTH, Slot, slots_for
 
 PANEL_WIDTH = 1200
-FONT_SIZE = 30
+FONT_PATH = Path(__file__).resolve().parent.parent / "assets" / "ComicNeue-Bold.ttf"
+FONT_SIZE = 34
 PADDING = 20
 TAIL = 50
 MAX_TAIL = 110
@@ -42,7 +43,7 @@ def speaker_positions(shot: PanelSpec) -> dict[str, float]:
 
 
 def _font() -> ImageFont.FreeTypeFont:
-    return ImageFont.load_default(size=FONT_SIZE)
+    return ImageFont.truetype(FONT_PATH, FONT_SIZE)
 
 
 def _text_box(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[str, int, int]:
@@ -68,13 +69,23 @@ def _overlap(a: Box, b: Box) -> float:
     return max(width, 0) * max(height, 0)
 
 
-def _place(size: tuple[int, int], canvas: tuple[int, int], target: tuple[float, float], blocked: list[Box]) -> Box:
+def _place(
+    size: tuple[int, int],
+    canvas: tuple[int, int],
+    target: tuple[float, float],
+    blocked: list[Box],
+    after: Box | None = None,
+) -> Box:
     """Pick the free spot nearest the speaker, preferring above them; covering a head costs most."""
     width, height = size
     best, best_cost = None, float("inf")
     for top in range(MARGIN, max(MARGIN + 1, canvas[1] - height - MARGIN), 30):
         for left in range(MARGIN, max(MARGIN + 1, canvas[0] - width - MARGIN), 30):
             box = (left, top, left + width, top + height)
+            # Reading order: each bubble starts lower than the last, and only sits to its left
+            # once it is fully below it.
+            if after and (top <= after[1] + 10 or (left < after[0] and top < after[3])):
+                continue
             covered = sum(_overlap(box, item) for item in blocked)
             distance = abs(left + width / 2 - target[0]) + abs(top + height - target[1])
             cost = covered * 100 + distance + (0 if top + height <= target[1] else canvas[1])
@@ -140,16 +151,19 @@ def letter_panel(
         blocked.append((0, 0, w * 0.5, _draw_caption(draw, panel.caption, font) + MARGIN))
     positions = speaker_positions(shot)
     bubbles = []
+    previous: Box | None = None
     for line in panel.dialogue:
         head = head_boxes.get(line.speaker.casefold())
         x = (head[0] + head[2]) / 2 if head else positions.get(line.speaker, 0.5) * w
         y = head[1] if head else h * 0.4
         wrapped, text_width, text_height = _text_box(draw, line.text, font)
         size = (text_width + 2 * PADDING, text_height + 2 * PADDING)
-        box = _place(size, (w, h), (x, y), blocked)
+        box = _place(size, (w, h), (x, y), blocked, previous)
+        previous = box
         blocked.append(box)
         bubbles.append((wrapped, box, _tail_tip(box, head, x, y)))
-    for wrapped, box, tip in bubbles:
+    # Last first, so a lower bubble's tail passes behind the bubbles above it.
+    for wrapped, box, tip in reversed(bubbles):
         _draw_bubble(draw, wrapped, box, tip, font)
     image.save(out)
     return out

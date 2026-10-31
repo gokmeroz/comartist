@@ -29,7 +29,7 @@ from comartist.tools.canon import CanonStore, accept_chapter, blockers, proposed
 from comartist.tools.character_sheets import approve_sheet, generate_sheet
 from comartist.workflows.panel_loop import PanelLoop, data_url
 from comartist.workflows.script_loop import ScriptLoop
-from comartist.workflows.stub_pipeline import can_resume, resume_pipeline, run_guarded, run_stub_pipeline
+from comartist.workflows.stub_pipeline import can_resume, regenerate_panel, resume_pipeline, run_guarded, run_stub_pipeline
 
 STAGE_ICONS = {
     StageState.PENDING: "·",
@@ -176,7 +176,9 @@ def render_new_chapter() -> None:
             st.rerun()
 
 
-def start_run(chapter_id: str, settings: RunSettings, resume: bool = False) -> None:
+def start_run(
+    chapter_id: str, settings: RunSettings, resume: bool = False, redo: tuple[str, str] | None = None
+) -> None:
     run_settings = settings
     if not PROVIDERS[settings.provider].implemented:
         run_settings = settings.model_copy(update={"provider": "stub", "text_model": "stub-text", "image_model": "stub-image"})
@@ -197,6 +199,13 @@ def start_run(chapter_id: str, settings: RunSettings, resume: bool = False) -> N
         except ModelError as error:
             st.session_state.start_error = str(error)
             return
+    if redo and panel_loop is not None:
+        threading.Thread(
+            target=run_guarded,
+            args=(regenerate_panel, get_store(), chapter_id, run_settings, panel_loop, chapter_judge, *redo),
+            daemon=True,
+        ).start()
+        return
     if resume and panel_loop is not None:
         threading.Thread(
             target=run_guarded,
@@ -279,7 +288,7 @@ def render_full_run(run: ChapterRun, settings: RunSettings) -> None:
     render_run_progress(run.chapter_id)
 
 
-def render_overview(run: ChapterRun) -> None:
+def render_overview(run: ChapterRun, settings: RunSettings) -> None:
     st.subheader("Overview")
     if run.state is not RunState.DONE:
         st.caption("Appears when the run finishes.")
@@ -344,6 +353,7 @@ def render_overview(run: ChapterRun) -> None:
         render_pages(run)
     elif run.panels:
         render_comic_preview(run.panels)
+    render_regenerate(run, settings)
     if run.panels:
         render_attempt_viewer(run.panels)
 
@@ -485,6 +495,17 @@ def render_verdict(run: ChapterRun) -> None:
         st.rerun()
 
 
+def render_regenerate(run: ChapterRun, settings: RunSettings) -> None:
+    if run.state is not RunState.DONE or not run.visual_plan or not run.pages:
+        return
+    st.subheader("Fix a panel")
+    panel_id = st.selectbox("Panel", [panel.panel_id for panel in run.panels], key="redo_panel")
+    note = st.text_input("What should change?", key="redo_note", placeholder="Keep them in the rain, soaked")
+    if st.button("Regenerate panel", disabled=not note.strip()):
+        start_run(run.chapter_id, settings, redo=(panel_id, note.strip()))
+        st.rerun()
+
+
 def render_pages(run: ChapterRun) -> None:
     st.subheader("Comic pages")
     for page in run.pages:
@@ -562,7 +583,7 @@ def main() -> None:
     run = next(run for run in runs if run.chapter_id == selected)
     render_full_run(run, settings)
     st.divider()
-    render_overview(run)
+    render_overview(run, settings)
 
 
 if __name__ == "__main__":
