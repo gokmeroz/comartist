@@ -12,10 +12,10 @@ from pathlib import Path
 from langgraph.graph import END, StateGraph
 from pydantic import BaseModel, Field
 
-from comartist.adapters import ImageModel, ImageReference, ImageRequest, ModelError
+from comartist.adapters import ImageModel, ImageReference, ImageRequest, ModelError, ModelErrorKind
 from comartist.agents.critic import Critic, CriticError
 from comartist.agents.visual_director import VisualDirector, VisualDirectorError
-from comartist.models.critique import REDIRECT_FAILURES, PanelCritique
+from comartist.models.critique import REDIRECT_FAILURES, PanelCritique, PanelFailure, PanelIssue
 from comartist.models.run import ChapterRun, ChapterSpec, Cost, PanelAttempt
 from comartist.models.visual import PanelSpec, VisualPlan
 from comartist.prompts import panel_image
@@ -26,6 +26,7 @@ class PanelStop(StrEnum):
     ATTEMPTS_EXHAUSTED = "attempts exhausted"
     REPEATED_FAILURE = "same failure repeated"
     BUDGET_EXHAUSTED = "budget exhausted"
+    BLOCKED = "blocked by content filter"
     ERROR = "error"
 
 
@@ -50,6 +51,7 @@ class _State(BaseModel):
     critique: PanelCritique | None = None
     pending_image: str = ""
     redirected: bool = False
+    softened: bool = False
     cost: Cost = Field(default_factory=Cost)
     stop_reason: PanelStop | None = None
     error: str = ""
@@ -76,7 +78,9 @@ class PanelLoop:
         graph.add_node("critique", self._critique)
         graph.add_node("redirect", self._redirect)
         graph.set_entry_point("generate")
-        graph.add_conditional_edges("generate", self._after_generate, {"critique": "critique", END: END})
+        graph.add_conditional_edges(
+            "generate", self._after_generate, {"critique": "critique", "redirect": "redirect", END: END}
+        )
         graph.add_conditional_edges(
             "critique", self._after_critique, {"generate": "generate", "redirect": "redirect", END: END}
         )
@@ -88,6 +92,8 @@ class PanelLoop:
         shots = {shot.panel_id: shot for shot in run.visual_plan.panels}
         cost = Cost()
         for panel in run.panels:
+            if not panel.best_image:
+                continue
             try:
                 visible = {name.casefold() for name in shots[panel.panel_id].characters}
                 looks = [look for look in run.visual_plan.looks if look.name.casefold() in visible]
@@ -109,7 +115,7 @@ class PanelLoop:
     def _generate(self, state: _State) -> dict:
         repairs = [issue.repair for issue in state.critique.issues] if state.critique else []
         prompt = panel_image.build(
-            state.shot, state.action, state.plan.style, self._looks(state), repairs, state.spec.location
+            state.shot, "" if state.softened else state.action, state.plan.style, self._looks(state), repairs, state.spec.location
         )
         references = [
             ImageReference(image_url=url, caption=f"Approved reference for {name}:")
@@ -118,6 +124,8 @@ class PanelLoop:
         try:
             result = self._images.generate(ImageRequest(prompt=prompt, references=references, size=state.shot.size))
         except ModelError as error:
+            if error.kind is ModelErrorKind.CONTENT_FILTER:
+                return self._filtered(state)
             return {"error": str(error), "stop_reason": PanelStop.ERROR}
         number = len(state.attempts) + 1
         if result.image_b64:
@@ -128,11 +136,34 @@ class PanelLoop:
             image = result.url
         return {"pending_image": image, "cost": state.cost.add(result.cost)}
 
+    def _filtered(self, state: _State) -> dict:
+        """A refusal is this panel's failure, not the chapter's: reshoot once, then give up."""
+        attempt = PanelAttempt(
+            attempt=len(state.attempts) + 1, accepted=False, failure="CONTENT_FILTER",
+            note="The image service refused this prompt.",
+        )
+        attempts = [*state.attempts, attempt]
+        if state.softened:
+            return {"attempts": attempts, "stop_reason": PanelStop.BLOCKED}
+        issue = PanelIssue(
+            category=PanelFailure.SCRIPT_MISMATCH,
+            evidence="The image service's content filter refused this shot.",
+            repair="Describe the moment in neutral terms, focusing on faces and emotion. "
+            "Leave out alcohol, drinks, and anything else a filter could flag.",
+        )
+        return {
+            "attempts": attempts,
+            "critique": PanelCritique(approved=False, score=0, issues=[issue]),
+            "pending_image": "",
+            "softened": True,
+            "redirected": False,
+        }
+
     def _critique(self, state: _State) -> dict:
         number = len(state.attempts) + 1
         try:
             result = self._critic.review_panel(
-                state.shot, state.action, state.plan.style, self._looks(state),
+                state.shot, "" if state.softened else state.action, state.plan.style, self._looks(state),
                 data_url(state.pending_image), self._references(state), state.spec.location,
             )
         except (CriticError, ModelError) as error:
@@ -178,7 +209,9 @@ class PanelLoop:
 
     @staticmethod
     def _after_generate(state: _State) -> str:
-        return END if state.stop_reason else "critique"
+        if state.stop_reason:
+            return END
+        return "critique" if state.pending_image else "redirect"
 
     @staticmethod
     def _after_critique(state: _State) -> str:
@@ -197,7 +230,7 @@ class PanelLoop:
         final = _State.model_validate(
             self._graph.invoke(
                 _State(spec=spec, plan=plan, shot=shot, action=action, folder=folder, budget_usd=budget_usd),
-                {"recursion_limit": 3 * self._max_attempts + 3},
+                {"recursion_limit": 3 * self._max_attempts + 6},
             )
         )
         return PanelLoopResult(

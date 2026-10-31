@@ -97,9 +97,9 @@ def test_chapter_exports_pages_and_pdf(tmp_path: Path) -> None:
     assert Path(pdf).read_bytes().startswith(b"%PDF")
 
 
-def test_missing_image_is_an_error_not_a_blank_panel(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="p1-1"):
-        letter_chapter(chapter(tmp_path, ""), tmp_path / "pages")
+def test_blocked_panel_gets_stand_in_art_and_chapter_still_exports(tmp_path: Path) -> None:
+    pages, pdf = letter_chapter(chapter(tmp_path, ""), tmp_path / "pages")
+    assert len(pages) == 1 and Path(pdf).exists()
 
 
 def test_bubble_avoids_located_head(tmp_path: Path) -> None:

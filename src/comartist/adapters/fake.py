@@ -1,7 +1,10 @@
 """Deterministic in-memory models for tests and the offline stub provider."""
 
 import base64
+import io
 from collections.abc import Callable
+
+from PIL import Image
 
 from comartist.adapters.base import (
     ImageRequest,
@@ -13,12 +16,13 @@ from comartist.adapters.base import (
 from comartist.models.run import Cost
 
 # 1x1 transparent PNG.
-BLANK_PNG_B64 = base64.b64encode(
-    bytes.fromhex(
-        "89504e470d0a1a0a0000000d4948445200000001000000010806000000"
-        "1f15c4890000000d49444154789c6300010000000500010d0a2db40000000049454e44ae426082"
-    )
-).decode()
+def _blank_png() -> str:
+    buffer = io.BytesIO()
+    Image.new("RGB", (4, 4), "white").save(buffer, "PNG")
+    return base64.b64encode(buffer.getvalue()).decode()
+
+
+BLANK_PNG_B64 = _blank_png()
 
 
 def _tokens(text: str) -> int:

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from comartist.adapters import ModelError, ModelErrorKind
+from comartist.adapters.base import FALLBACK_KINDS
 from comartist.adapters.fake import FakeImageModel, FakeTextModel
 from comartist.agents.critic import Critic
 from comartist.agents.visual_director import VisualDirector
@@ -105,3 +106,25 @@ def test_simulated_attempts_have_no_image() -> None:
         panel_id="p", page=1, index=1, description="d", attempts=[PanelAttempt(attempt=1, accepted=True)]
     )
     assert panel.best_image == ""
+
+
+FILTERED = ModelError(ModelErrorKind.CONTENT_FILTER, "refused", "meta")
+
+
+def test_refused_prompt_is_reshot_without_the_action(tmp_path: Path) -> None:
+    new_shot = SHOT.model_copy(update={"framing": "close-up"}).model_dump_json()
+    result, _, images = run(tmp_path, [new_shot, APPROVED], images=FakeImageModel(errors=[FILTERED]))
+
+    assert result.accepted and result.shot.framing == "close-up"
+    assert result.attempts[0].failure == "CONTENT_FILTER"
+    assert "Matt waits." not in images.requests[1].prompt
+
+
+def test_second_refusal_blocks_only_this_panel(tmp_path: Path) -> None:
+    new_shot = SHOT.model_dump_json()
+    result, _, _ = run(tmp_path, [new_shot], images=FakeImageModel(errors=[FILTERED, FILTERED]))
+    assert result.stop_reason is PanelStop.BLOCKED and not result.accepted and result.error == ""
+
+
+def test_content_filter_is_not_a_fallback_case() -> None:
+    assert ModelErrorKind.CONTENT_FILTER not in FALLBACK_KINDS

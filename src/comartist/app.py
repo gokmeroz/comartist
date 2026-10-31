@@ -29,7 +29,7 @@ from comartist.tools.canon import CanonStore, accept_chapter, blockers, proposed
 from comartist.tools.character_sheets import approve_sheet, generate_sheet
 from comartist.workflows.panel_loop import PanelLoop, data_url
 from comartist.workflows.script_loop import ScriptLoop
-from comartist.workflows.stub_pipeline import run_stub_pipeline
+from comartist.workflows.stub_pipeline import can_resume, resume_pipeline, run_guarded, run_stub_pipeline
 
 STAGE_ICONS = {
     StageState.PENDING: "·",
@@ -69,6 +69,7 @@ def render_sidebar() -> RunSettings:
         "Model provider",
         list(PROVIDERS),
         format_func=lambda key: PROVIDERS[key].label,
+        index=list(PROVIDERS).index("meta"),
         key="provider",
     )
     provider = PROVIDERS[provider_id]
@@ -175,7 +176,7 @@ def render_new_chapter() -> None:
             st.rerun()
 
 
-def start_run(chapter_id: str, settings: RunSettings) -> None:
+def start_run(chapter_id: str, settings: RunSettings, resume: bool = False) -> None:
     run_settings = settings
     if not PROVIDERS[settings.provider].implemented:
         run_settings = settings.model_copy(update={"provider": "stub", "text_model": "stub-text", "image_model": "stub-image"})
@@ -196,9 +197,16 @@ def start_run(chapter_id: str, settings: RunSettings) -> None:
         except ModelError as error:
             st.session_state.start_error = str(error)
             return
+    if resume and panel_loop is not None:
+        threading.Thread(
+            target=run_guarded,
+            args=(resume_pipeline, get_store(), chapter_id, run_settings, panel_loop, chapter_judge),
+            daemon=True,
+        ).start()
+        return
     threading.Thread(
-        target=run_stub_pipeline,
-        args=(get_store(), chapter_id, run_settings),
+        target=run_guarded,
+        args=(run_stub_pipeline, get_store(), chapter_id, run_settings),
         kwargs={"story_architect": story_architect, "script_loop": script_loop, "visual_director": visual_director, "panel_loop": panel_loop, "chapter_judge": chapter_judge},
         daemon=True,
     ).start()
@@ -262,6 +270,9 @@ def render_full_run(run: ChapterRun, settings: RunSettings) -> None:
     label = "⏳ RUNNING…" if running else "▶ RUN FULL PIPELINE"
     if st.button(label, key="run_full", disabled=running, width="stretch"):
         start_run(run.chapter_id, settings)
+        st.rerun()
+    if can_resume(run) and st.button("⏯ Resume, keeping finished panels", key="resume"):
+        start_run(run.chapter_id, settings, resume=True)
         st.rerun()
     if error := st.session_state.pop("start_error", None):
         st.error(f"Run not started: {error}")

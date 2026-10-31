@@ -65,6 +65,7 @@ class ModelErrorKind(StrEnum):
     RATE_LIMIT = "rate_limit"
     TRANSIENT = "transient"  # timeouts, 5xx, connection errors
     BAD_REQUEST = "bad_request"
+    CONTENT_FILTER = "content_filter"  # the provider refused this prompt
     BAD_RESPONSE = "bad_response"  # provider answered but the payload is unusable
 
 

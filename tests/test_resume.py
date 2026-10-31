@@ -1,0 +1,84 @@
+"""Resuming a stopped run keeps paid-for panels; crashes are recorded on the run."""
+
+from pathlib import Path
+
+from PIL import Image
+
+from comartist.adapters.fake import FakeImageModel, FakeTextModel
+from comartist.agents.chapter_judge import ChapterJudge
+from comartist.agents.critic import Critic
+from comartist.agents.visual_director import VisualDirector
+from comartist.models import (
+    ChapterVerdict,
+    CharacterLook,
+    PanelAttempt,
+    PanelResult,
+    PanelSpec,
+    RunSettings,
+    RunState,
+    Scene,
+    Script,
+    ScriptPanel,
+    VisualPlan,
+)
+from comartist.workflows.panel_loop import PanelLoop
+from comartist.workflows.store import RunStore, chapter_template
+from comartist.workflows.stub_pipeline import can_resume, resume_pipeline, run_guarded
+
+SETTINGS = RunSettings(provider="meta", text_model="m", image_model="i")
+APPROVED = '{"approved": true, "score": 0.9}'
+VERDICT = ChapterVerdict(approved=True, score=0.9, summary="Good.").model_dump_json()
+
+
+def shot(panel_id: str) -> PanelSpec:
+    return PanelSpec(
+        panel_id=panel_id, framing="f", composition="c", poses="p", lighting="l", setting="s", characters=["Matt"]
+    )
+
+
+def stopped_run(store: RunStore, tmp_path: Path):
+    run = store.create(chapter_template())
+    finished = tmp_path / "done.png"
+    Image.new("RGB", (600, 400)).save(finished)
+    run.script = Script(scenes=[Scene(location="Roof", panels=[
+        ScriptPanel(page=1, index=1, action="a", characters=["Matt"]),
+        ScriptPanel(page=1, index=2, action="b", characters=["Matt"]),
+    ])])
+    run.visual_plan = VisualPlan(
+        style="Ink", looks=[CharacterLook(name="Matt", appearance="a", outfit="o")],
+        panels=[shot("p1-1"), shot("p1-2")],
+    )
+    run.panels = [
+        PanelResult(panel_id="p1-1", page=1, index=1, description="a",
+                    attempts=[PanelAttempt(attempt=1, accepted=True, image=str(finished), score=0.9)]),
+        PanelResult(panel_id="p1-2", page=1, index=2, description="b"),
+    ]
+    run.state = RunState.FAILED
+    store.save(run)
+    return run
+
+
+def test_resume_generates_only_missing_panels_and_finishes(tmp_path: Path) -> None:
+    store = RunStore(tmp_path)
+    run = stopped_run(store, tmp_path)
+    assert can_resume(run)
+    text, images = FakeTextModel([APPROVED, '{"heads": {}}', '{"heads": {}}', VERDICT]), FakeImageModel()
+    loop = PanelLoop(images, Critic(text), VisualDirector(text))
+
+    resume_pipeline(store, run.chapter_id, SETTINGS, loop, ChapterJudge(text))
+    saved = store.load(run.chapter_id)
+
+    assert len(images.requests) == 1
+    assert saved.state is RunState.DONE and saved.verdict.approved and saved.pages
+
+
+def test_crash_is_recorded_on_the_run(tmp_path: Path) -> None:
+    store = RunStore(tmp_path)
+    run = store.create(chapter_template())
+
+    def explode(*_: object) -> None:
+        raise TypeError("old code")
+
+    run_guarded(explode, store, run.chapter_id)
+    saved = store.load(run.chapter_id)
+    assert saved.state is RunState.FAILED and "old code" in saved.error

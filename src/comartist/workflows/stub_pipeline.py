@@ -116,6 +116,8 @@ def _real_panels(store: RunStore, run: ChapterRun, settings: RunSettings, loop: 
     folder = store.root / run.chapter_id / "panels"
     folder.mkdir(exist_ok=True)
     for number, panel in enumerate(run.panels):
+        if panel.attempts:  # already tried, on a run being resumed
+            continue
         remaining = settings.chapter_budget_usd - (run.cost.usd or 0)
         if remaining <= 0:
             status.state, status.detail = StageState.FAILED, f"budget spent at {number}/{len(run.panels)} panels"
@@ -140,6 +142,91 @@ def _real_panels(store: RunStore, run: ChapterRun, settings: RunSettings, loop: 
             store.save(run)
             return True
     return False
+
+
+def _finish_real(
+    store: RunStore, run: ChapterRun, settings: RunSettings, loop: PanelLoop, judge: ChapterJudge | None
+) -> ChapterRun:
+    """Panels onward: generate what is missing, letter, and judge."""
+    status = run.stages[Stage.PANELS]
+    status.state = StageState.RUNNING
+    store.save(run)
+    if _real_panels(store, run, settings, loop):
+        return run
+    accepted = sum(panel.accepted for panel in run.panels)
+    status.state = StageState.DONE
+    status.detail = f"{accepted}/{len(run.panels)} panels accepted in {status.attempts} attempts"
+    run.log.append(f"{Stage.PANELS}: {status.detail}")
+    status = run.stages[Stage.LAYOUT]
+    status.state = StageState.RUNNING
+    store.save(run)
+    status.cost = loop.locate_heads(run)
+    run.pages, run.pdf = letter_chapter(run, store.root / run.chapter_id / "pages")
+    status.state, status.attempts = StageState.DONE, 1
+    status.detail = f"{len(run.pages)} pages lettered, PDF exported"
+    run.log.append(f"{Stage.LAYOUT}: {status.detail}")
+    store.save(run)
+    status = run.stages[Stage.CHAPTER_JUDGE]
+    if judge is None:
+        status.state, status.detail = StageState.PENDING, "no judge configured"
+    else:
+        status.state = StageState.RUNNING
+        run.log.append(f"{Stage.CHAPTER_JUDGE}: running ({settings.text_model})...")
+        store.save(run)
+        try:
+            judged = judge.judge(run.spec, run.script, run.pages)
+        except (ChapterJudgeError, ModelError) as error:
+            status.state, status.detail = StageState.FAILED, "no valid verdict"
+            if isinstance(error, ChapterJudgeError):
+                status.cost = error.cost
+            run.state, run.error = RunState.FAILED, str(error)
+            run.log.append(f"{Stage.CHAPTER_JUDGE}: FAILED - {error}")
+            store.save(run)
+            return run
+        run.verdict = judged.verdict
+        run.prompt_versions[Stage.CHAPTER_JUDGE] = judged.prompt_version
+        status.state, status.attempts, status.cost = StageState.DONE, 1, judged.cost
+        outcome = "approved" if judged.verdict.approved else "not approved"
+        status.detail = f"{outcome}, score {judged.verdict.score:.2f}"
+        run.log.append(f"{Stage.CHAPTER_JUDGE}: {status.detail}")
+    run.state = RunState.DONE
+    run.log.append("Run finished. Nothing is canon until the chapter is accepted.")
+    store.save(run)
+    return run
+
+
+def can_resume(run: ChapterRun) -> bool:
+    """A stopped run with a plan can finish without repaying for finished stages."""
+    return (
+        run.state in (RunState.FAILED, RunState.BUDGET_EXHAUSTED)
+        and run.visual_plan is not None
+        and run.script is not None
+        and bool(run.panels)
+    )
+
+
+def resume_pipeline(
+    store: RunStore,
+    chapter_id: str,
+    settings: RunSettings,
+    panel_loop: PanelLoop,
+    chapter_judge: ChapterJudge | None,
+) -> ChapterRun:
+    run = store.load(chapter_id)
+    run.state, run.error, run.settings = RunState.RUNNING, "", settings
+    run.log.append("Resumed: keeping finished panels.")
+    return _finish_real(store, run, settings, panel_loop, chapter_judge)
+
+
+def run_guarded(pipeline: Callable[..., ChapterRun], store: RunStore, chapter_id: str, *args, **kwargs) -> None:
+    """Thread entry point: a crash must show up on the run, never vanish with the thread."""
+    try:
+        pipeline(store, chapter_id, *args, **kwargs)
+    except Exception as error:  # noqa: BLE001 - recorded and shown, not swallowed
+        run = store.load(chapter_id)
+        run.state, run.error = RunState.FAILED, f"{type(error).__name__}: {error}"
+        run.log.append(f"CRASHED - {run.error}")
+        store.save(run)
 
 
 def run_stub_pipeline(
@@ -304,11 +391,8 @@ def run_stub_pipeline(
     status.state = StageState.RUNNING
     run.log.append(f"{Stage.PANELS}: running...")
     if panel_loop is not None and run.visual_plan is not None and run.script is not None:
-        stopped = _real_panels(store, run, settings, panel_loop)
-        if stopped:
-            return run
-    else:
-        _stub_panel_stage(store, run, settings, status, panels, step_seconds, sleep)
+        return _finish_real(store, run, settings, panel_loop, chapter_judge)
+    _stub_panel_stage(store, run, settings, status, panels, step_seconds, sleep)
     accepted = sum(panel.accepted for panel in run.panels)
     status.state = StageState.DONE
     status.detail = (
@@ -317,46 +401,13 @@ def run_stub_pipeline(
     )
     run.log.append(f"{Stage.PANELS}: {status.detail}")
     store.save(run)
-    if run.panels and all(panel.best_image for panel in run.panels):
-        status = run.stages[Stage.LAYOUT]
-        if panel_loop is not None:
-            status.cost = panel_loop.locate_heads(run)
-        run.pages, run.pdf = letter_chapter(run, store.root / run.chapter_id / "pages")
-        status.state, status.attempts = StageState.DONE, 1
-        status.detail = f"{len(run.pages)} pages lettered, PDF exported"
-        run.log.append(f"{Stage.LAYOUT}: {status.detail}")
-        store.save(run)
-    else:
-        stage(Stage.LAYOUT, f"{spec.target_pages} pages lettered", 1, Cost())
-    if chapter_judge is None or not run.pages:
-        stage(
-            Stage.CHAPTER_JUDGE,
-            "coherent sequence, no canon violations (stub)",
-            1,
-            Cost(prompt_tokens=200 * panels, completion_tokens=300, usd=0.0),
-        )
-    else:
-        status = run.stages[Stage.CHAPTER_JUDGE]
-        status.state = StageState.RUNNING
-        run.log.append(f"{Stage.CHAPTER_JUDGE}: running ({settings.text_model})...")
-        store.save(run)
-        try:
-            judged = chapter_judge.judge(spec, run.script, run.pages)
-        except (ChapterJudgeError, ModelError) as error:
-            status.state, status.detail = StageState.FAILED, "no valid verdict"
-            if isinstance(error, ChapterJudgeError):
-                status.cost = error.cost
-            run.state, run.error = RunState.FAILED, str(error)
-            run.log.append(f"{Stage.CHAPTER_JUDGE}: FAILED - {error}")
-            store.save(run)
-            return run
-        run.verdict = judged.verdict
-        run.prompt_versions[Stage.CHAPTER_JUDGE] = judged.prompt_version
-        status.state, status.attempts, status.cost = StageState.DONE, 1, judged.cost
-        outcome = "approved" if judged.verdict.approved else "not approved"
-        status.detail = f"{outcome}, score {judged.verdict.score:.2f}"
-        run.log.append(f"{Stage.CHAPTER_JUDGE}: {status.detail}")
-        store.save(run)
+    stage(Stage.LAYOUT, f"{spec.target_pages} pages lettered", 1, Cost())
+    stage(
+        Stage.CHAPTER_JUDGE,
+        "coherent sequence, no canon violations (stub)",
+        1,
+        Cost(prompt_tokens=200 * panels, completion_tokens=300, usd=0.0),
+    )
 
     run.state = RunState.DONE
     run.log.append("Run finished. Nothing is canon until the chapter is accepted.")

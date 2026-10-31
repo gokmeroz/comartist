@@ -126,6 +126,8 @@ class _Client:
             kind = _error_kind(status)
             if kind is ModelErrorKind.RATE_LIMIT and "quota" in message.lower():
                 kind = ModelErrorKind.QUOTA
+            if kind is ModelErrorKind.BAD_REQUEST and "content management policy" in message.lower():
+                kind = ModelErrorKind.CONTENT_FILTER
             raise ModelError(kind, f"HTTP {status}: {message}", self.provider)
         return body, time.monotonic() - started
 

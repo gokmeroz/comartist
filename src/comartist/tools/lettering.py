@@ -189,15 +189,19 @@ def compose_page(panels: list[Path], slots: list[Slot], out: Path) -> Path:
     return out
 
 
-def _unlettered(panels: list[PanelResult]) -> list[str]:
-    return [panel.panel_id for panel in panels if not panel.best_image]
+def _blocked_art(folder: Path, panel: PanelResult) -> str:
+    """Stand-in art for a panel with no image, so the rest of the page can still be read."""
+    path = folder / f"{panel.panel_id}-blocked.png"
+    image = Image.new("RGB", (PANEL_WIDTH, 800), (225, 220, 210))
+    draw = ImageDraw.Draw(image)
+    wrapped = "\n".join(textwrap.wrap(f"[No image] {panel.description}", width=40))
+    draw.multiline_text((600, 400), wrapped, fill=INK, font=_font(), anchor="mm", align="center")
+    image.save(path)
+    return str(path)
 
 
 def letter_chapter(run: ChapterRun, folder: Path) -> tuple[list[str], str]:
     """Letter every panel, build the pages, and export a PDF. Returns (pages, pdf path)."""
-    missing = _unlettered(run.panels)
-    if missing:
-        raise ValueError(f"Panels without an image: {', '.join(missing)}")
     folder.mkdir(exist_ok=True)
     scripted = {panel.panel_id: panel for panel in run.script.panels}
     shots = {shot.panel_id: shot for shot in run.visual_plan.panels}
@@ -211,7 +215,7 @@ def letter_chapter(run: ChapterRun, folder: Path) -> tuple[list[str], str]:
             box = _gutter_box(slot)
             lettered.append(
                 letter_panel(
-                    panel.best_image, scripted[panel.panel_id], shots[panel.panel_id],
+                    panel.best_image or _blocked_art(folder, panel), scripted[panel.panel_id], shots[panel.panel_id],
                     folder / f"{panel.panel_id}.png", (box[2] - box[0], box[3] - box[1]), panel.heads,
                 )
             )
