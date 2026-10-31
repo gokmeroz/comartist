@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from comartist.models.critique import PanelFailure
 from comartist.models.visual import CharacterLook, PanelSpec
 
-VERSION = "panel_critic/v2"
+VERSION = "panel_critic/v3"
 
 SYSTEM = f"""\
 You are the Critic for one generated comic panel. The first image is the panel; any further
@@ -17,6 +17,8 @@ Reject only for failures a reader would notice, using these categories:
 Use MISSING_CHARACTER when someone required is absent and SCRIPT_MISMATCH when the action
 differs. Use WRONG_LOCATION when streets, signs, or architecture do not fit the stated
 location. Use IDENTITY_DRIFT or WRONG_OUTFIT when a character does not match their look.
+References fix face, hair, and build only; judge outfits by the written look, since a
+character may wear different clothes than in their reference.
 "score" is your estimate from 0 to 1 of the panel's quality.
 
 Reply with a single JSON object and nothing else, in this shape:

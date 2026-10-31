@@ -1,0 +1,43 @@
+# ComArtist - new chapter brief. Fill in the fields, then save.
+# Required: title, characters, premise. Everything else is optional.
+
+title: "Chapter 2 - The Rooftop"
+
+# When and where the chapter takes place.
+timeframe: "Late August 2024, one week before Matt's flight home"
+location: "New York City"
+
+# Characters appearing in this chapter (names).
+characters:
+  - Matt
+  - Andy
+
+# What happens, in a few sentences. The agents fill in the rest.
+premise: >
+  Matt and Andy meet at the same corner near NYU, this time dressed up for
+  Andy's friend's rooftop party. They spend a thunderstorm-cut evening on the
+  roof overlooking Manhattan. Andy almost tells Matt the secret, then stops,
+  and Matt leaves the party still not knowing it.
+
+# Canon: facts the agents must NOT change.
+canon:
+  - Andy moved to NYC in 2020.
+  - Matt and Andy reunited near NYU in summer 2024 and caught up at a pub.
+  - Matt is in the United States for Work & Travel and flies home at the end of summer.
+  - Andy has accepted a job in Los Angeles and leaves NYC next month.
+  - Only Andy knows about the Los Angeles job. Matt never learns it in this chapter.
+  - Andy never says the words "Los Angeles" or mentions the job aloud.
+
+# Outfit change: same faces as chapter 1, dressed up for the party.
+outfits:
+  Matt: "Navy blazer over a white button-up shirt, dark slim jeans, brown leather boots, black digital watch on his left wrist."
+  Andy: "Black bomber jacket over a charcoal crew-neck sweater, black slim trousers, white leather sneakers, silver bracelet on his right wrist."
+
+# Mood words.
+tone:
+  - warm
+  - funny
+  - bittersweet
+
+# Pages to generate (1-40). Keep it small while testing.
+target_pages: 4

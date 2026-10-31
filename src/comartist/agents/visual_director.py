@@ -103,7 +103,7 @@ def attach_references(plan: VisualPlan, spec: ChapterSpec) -> VisualPlan:
         )
         for panel in plan.panels
     ]
-    locked = {look.name.casefold(): look for look in spec.locked_looks}
+    locked = {look.name.casefold(): look for look in spec.looks()}
     looks = [locked.get(look.name.casefold(), look) for look in plan.looks]
     style = spec.art_style or prompt.DEFAULT_STYLE
     return plan.model_copy(update={"panels": panels, "looks": looks, "style": style})

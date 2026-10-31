@@ -25,6 +25,7 @@ from comartist.models import (
 )
 from comartist.ui.theme import apply_theme, cost_hud, pixel_bar
 from comartist.workflows.store import BriefError, RunStore, chapter_template, parse_brief
+from comartist.memory.continuity import carry_over
 from comartist.tools.canon import CanonStore, accept_chapter, blockers, proposed_facts
 from comartist.tools.character_sheets import approve_sheet, generate_sheet
 from comartist.workflows.panel_loop import PanelLoop, data_url
@@ -162,11 +163,20 @@ def render_new_chapter() -> None:
         else:
             st.success(f"✓ Valid brief: {spec.title} · {spec.target_pages} pages")
             st.markdown(character_chips(spec.characters), unsafe_allow_html=True)
+        carry = carry_over(get_store().list(), CanonStore(Settings().canon_path).facts())
+        use_carry = False
+        if carry.sources:
+            looks = ", ".join(look.name for look in carry.locked_looks) or "none"
+            use_carry = st.checkbox(
+                f"Continue from {', '.join(carry.sources)}: {len(carry.canon)} canon facts, approved looks for {looks}",
+                value=True,
+                help="Set `outfits:` in the brief to change clothes; faces and references stay.",
+            )
         save, download, _ = st.columns([1, 1, 2])
         download.download_button("⬇ Template", template, file_name="new_chapter.yaml")
         if save.button("💾 Save chapter"):
             try:
-                run = get_store().create(text)
+                run = get_store().create(text, carry if use_carry else None)
             except BriefError as error:
                 st.error(f"Brief not saved: {error}")
                 return

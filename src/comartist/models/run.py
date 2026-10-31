@@ -31,6 +31,20 @@ class ChapterSpec(BaseModel):
     locked_looks: list[CharacterLook] = Field(
         default_factory=list, description="Looks approved with a reference; visual plans keep them."
     )
+    outfits: dict[str, str] = Field(
+        default_factory=dict,
+        description="Character name -> this chapter's outfit. Overrides a locked look's outfit only.",
+    )
+
+    def looks(self) -> list[CharacterLook]:
+        """Locked looks with this chapter's outfits applied; appearance never changes here."""
+        outfits = {name.casefold(): outfit for name, outfit in self.outfits.items()}
+        return [
+            look.model_copy(update={"outfit": outfits[look.name.casefold()]})
+            if look.name.casefold() in outfits
+            else look
+            for look in self.locked_looks
+        ]
 
 
 class Stage(StrEnum):

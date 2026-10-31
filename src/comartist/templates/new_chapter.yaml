@@ -23,6 +23,11 @@ canon:
   - Matt and Andy have not met since middle school.
   - Matt is in the United States for Work & Travel.
 
+# Optional: this chapter's clothes. Faces and approved references carry over from
+# accepted chapters; only the outfit changes.
+# outfits:
+#   Matt: "Navy blazer over a white shirt, dark jeans"
+
 # Mood words.
 tone:
   - nostalgic

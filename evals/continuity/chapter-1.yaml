@@ -1,0 +1,33 @@
+# ComArtist - new chapter brief. Fill in the fields, then save.
+# Required: title, characters, premise. Everything else is optional.
+
+title: "Chapter 1 - The Reunion"
+
+# When and where the chapter takes place.
+timeframe: "Summer 2024"
+location: "New York City"
+
+# Characters appearing in this chapter (names).
+characters:
+  - Matt
+  - Andy
+
+# What happens, in a few sentences. The agents fill in the rest.
+premise: >
+  Matt and Andy meet again near NYU for the first time since middle school,
+  then spend the evening catching up at a pub.
+
+# Canon: facts the agents must NOT change.
+canon:
+  - Andy moved to NYC in 2020.
+  - Matt and Andy have not met since middle school.
+  - Matt is in the United States for Work & Travel.
+
+# Mood words.
+tone:
+  - nostalgic
+  - funny
+  - bittersweet
+
+# Pages to generate (1-40). Keep it small while testing.
+target_pages: 4
