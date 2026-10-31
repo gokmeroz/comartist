@@ -89,9 +89,9 @@ class PanelLoop:
         cost = Cost()
         for panel in run.panels:
             try:
-                panel.heads, spent = self._critic.locate_heads(
-                    data_url(panel.best_image), shots[panel.panel_id].characters
-                )
+                visible = {name.casefold() for name in shots[panel.panel_id].characters}
+                looks = [look for look in run.visual_plan.looks if look.name.casefold() in visible]
+                panel.heads, spent = self._critic.locate_heads(data_url(panel.best_image), looks)
             except ModelError:
                 continue  # lettering falls back to the shot's composition text
             cost = cost.add(spent)

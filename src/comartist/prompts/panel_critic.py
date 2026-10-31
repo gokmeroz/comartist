@@ -26,7 +26,9 @@ Reply with a single JSON object and nothing else, in this shape:
 
 
 HEADS_SYSTEM = """\
-Locate each named character's head in the comic panel, hair included. Give boxes as
+Locate each described character's head in the comic panel, hair included. Match people by
+their description, especially hair and clothing; never guess from position. Key each box by
+the name only. Give boxes as
 [left, top, right, bottom], each a fraction of the image width or height from 0 to 1.
 Omit anyone not visible. Reply with a single JSON object and nothing else:
 {"heads": {"Name": [0.1, 0.2, 0.3, 0.4]}}"""

@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="COMARTIST_", env_file=".env", extra="ignore")
 
     runs_dir: Path = Path("runs")
+    canon_path: Path = Path("runs/canon.json")
 
 
 class ModelPrice(BaseModel):
@@ -100,7 +101,7 @@ PROVIDERS: dict[str, ProviderOption] = {
         image_models=["Muse Image"],
         api_key_env="COMARTIST_META_API_KEY",
         implemented=True,
-        note="Primary provider ($150 credits). Story, script, Critic, and visual planning are live; images onward are simulated.",
+        note="Primary provider ($150 credits). All stages run on real models.",
     ),
     "fireworks": ProviderOption(
         label="Fireworks (Meta open weights)",

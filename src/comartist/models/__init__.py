@@ -25,12 +25,17 @@ from comartist.models.run import (
 from comartist.models.script import DialogueLine, Scene, Script, ScriptPanel
 from comartist.models.state import ComicState
 from comartist.models.story import PageBeat, StoryOutline
+from comartist.models.verdict import CanonFact, ChapterFailure, ChapterIssue, ChapterVerdict
 from comartist.models.visual import CharacterLook, PageLayout, PanelSpec, VisualPlan
 
 __all__ = [
+    "CanonFact",
     "ChapterBrief",
+    "ChapterFailure",
+    "ChapterIssue",
     "ChapterRun",
     "ChapterSpec",
+    "ChapterVerdict",
     "CharacterLook",
     "Character",
     "ComicState",

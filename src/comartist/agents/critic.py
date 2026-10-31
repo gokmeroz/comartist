@@ -81,13 +81,13 @@ class Critic:
             ]
         raise CriticError(rejected, cost)
 
-    def locate_heads(self, image: str, characters: list[str]) -> tuple[dict[str, list[float]], Cost]:
+    def locate_heads(self, image: str, looks: list[CharacterLook]) -> tuple[dict[str, list[float]], Cost]:
         """Find each visible head for lettering. Unusable replies give {} rather than a failure."""
         reply = self._model.complete(
             TextRequest(
                 messages=[
                     ChatMessage(role="system", content=panel_critic.HEADS_SYSTEM),
-                    ChatMessage(role="user", content=f"Characters: {', '.join(characters)}"),
+                    ChatMessage(role="user", content="\n".join(f"{look.name}: {look.appearance} Outfit: {look.outfit}" for look in looks)),
                 ],
                 temperature=0,
                 max_tokens=2000,
