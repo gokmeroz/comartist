@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 from pydantic import ValidationError
 
+from comartist.memory.continuity import CarryOver
 from comartist.models import ChapterRun, ChapterSpec
 
 TEMPLATE_PATH = Path(__file__).resolve().parent.parent / "templates" / "new_chapter.yaml"
@@ -49,8 +50,11 @@ class RunStore:
         self.root = root
         self._lock = threading.Lock()
 
-    def create(self, brief_text: str) -> ChapterRun:
+    def create(self, brief_text: str, carry: CarryOver | None = None) -> ChapterRun:
+        """brief.yaml keeps what the person wrote; run.json holds it merged with any carry-over."""
         spec = parse_brief(brief_text)
+        if carry:
+            spec = carry.apply(spec)
         base = slugify(spec.title)
         chapter_id, suffix = base, 2
         while (self.root / chapter_id).exists():
@@ -59,6 +63,11 @@ class RunStore:
         folder.mkdir(parents=True)
         (folder / "brief.yaml").write_text(brief_text)
         run = ChapterRun(chapter_id=chapter_id, spec=spec)
+        if carry and carry.sources:
+            run.log.append(
+                f"Carried over from {', '.join(carry.sources)}: {len(carry.canon)} canon facts, "
+                f"looks for {', '.join(look.name for look in carry.locked_looks) or 'nobody'}"
+            )
         self.save(run)
         return run
 

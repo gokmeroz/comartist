@@ -121,7 +121,10 @@ class PanelLoop:
             state.shot, "" if state.softened else state.action, state.plan.style, self._looks(state), repairs, state.spec.location
         )
         references = [
-            ImageReference(image_url=url, caption=f"Approved reference for {name}:")
+            ImageReference(
+                image_url=url,
+                caption=f"Approved reference for {name} (match face, hair and build; the outfit follows the text):",
+            )
             for name, url in zip(state.shot.references, self._references(state))
         ]
         try:

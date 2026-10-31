@@ -1,0 +1,20 @@
+# What must hold across chapter-1.yaml -> chapter-2.yaml. Checked by
+# `uv run python scripts/check_continuity.py <chapter-1 run id> <chapter-2 run id>`.
+
+recurring_characters: [Matt, Andy]
+location: "New York City"
+
+# Characters whose outfit must differ in chapter 2 while their face stays the same.
+outfit_changes: [Matt, Andy]
+
+# Andy's secret. None of these may appear in any dialogue or caption, in either chapter.
+# All-caps entries match case-sensitively; everything else ignores case.
+secret:
+  holder: Andy
+  never_written:
+    - "Los Angeles"
+    - "L.A."
+    - "LA"
+    - "California"
+    - "job offer"
+    - "new job"

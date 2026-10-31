@@ -75,7 +75,7 @@ def user_message(spec: ChapterSpec, script: Script) -> str:
         lines.extend(f"- {fact}" for fact in spec.canon)
     if spec.locked_looks:
         lines.append("Approved looks (use exactly as written):")
-        lines.extend(f"- {look.name}: {look.appearance} Outfit: {look.outfit}" for look in spec.locked_looks)
+        lines.extend(f"- {look.name}: {look.appearance} Outfit: {look.outfit}" for look in spec.looks())
     lines += ["", "Script:"]
     for scene in script.scenes:
         lines.append(f"Scene at {scene.location}: {scene.summary}")
