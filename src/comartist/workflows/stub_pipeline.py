@@ -9,6 +9,7 @@ import time
 from collections.abc import Callable
 
 from comartist.adapters import ModelError
+from comartist.agents.chapter_judge import ChapterJudge, ChapterJudgeError
 from comartist.agents.story_architect import StoryArchitect, StoryArchitectError
 from comartist.agents.visual_director import VisualDirector, VisualDirectorError
 from comartist.models import (
@@ -152,6 +153,7 @@ def run_stub_pipeline(
     script_loop: ScriptLoop | None = None,
     visual_director: VisualDirector | None = None,
     panel_loop: PanelLoop | None = None,
+    chapter_judge: ChapterJudge | None = None,
 ) -> ChapterRun:
     """Stages given an agent call a real model; the rest stay simulated.
 
@@ -169,6 +171,7 @@ def run_stub_pipeline(
     run.prompt_versions = {}
     run.panels = []
     run.pages, run.pdf = [], ""
+    run.verdict, run.accepted = None, False
     run.log = [f"Run started with {settings.provider} / {settings.text_model}."]
     for status in run.stages.values():
         status.state, status.detail, status.attempts, status.cost = StageState.PENDING, "", 0, Cost()
@@ -262,8 +265,6 @@ def run_stub_pipeline(
         run.log.append(
             f"{Stage.SCRIPT}: {status.detail} [{written.model}, {run.prompt_versions[Stage.SCRIPT]}]"
         )
-    if story_architect is not None:
-        run.log.append("Later stages are still simulated (stub).")
     store.save(run)
     if visual_director is None or run.script is None:
         stage(
@@ -327,14 +328,37 @@ def run_stub_pipeline(
         store.save(run)
     else:
         stage(Stage.LAYOUT, f"{spec.target_pages} pages lettered", 1, Cost())
-    stage(
-        Stage.CHAPTER_JUDGE,
-        "coherent sequence, no canon violations (stub)",
-        1,
-        Cost(prompt_tokens=200 * panels, completion_tokens=300, usd=0.0),
-    )
+    if chapter_judge is None or not run.pages:
+        stage(
+            Stage.CHAPTER_JUDGE,
+            "coherent sequence, no canon violations (stub)",
+            1,
+            Cost(prompt_tokens=200 * panels, completion_tokens=300, usd=0.0),
+        )
+    else:
+        status = run.stages[Stage.CHAPTER_JUDGE]
+        status.state = StageState.RUNNING
+        run.log.append(f"{Stage.CHAPTER_JUDGE}: running ({settings.text_model})...")
+        store.save(run)
+        try:
+            judged = chapter_judge.judge(spec, run.script, run.pages)
+        except (ChapterJudgeError, ModelError) as error:
+            status.state, status.detail = StageState.FAILED, "no valid verdict"
+            if isinstance(error, ChapterJudgeError):
+                status.cost = error.cost
+            run.state, run.error = RunState.FAILED, str(error)
+            run.log.append(f"{Stage.CHAPTER_JUDGE}: FAILED - {error}")
+            store.save(run)
+            return run
+        run.verdict = judged.verdict
+        run.prompt_versions[Stage.CHAPTER_JUDGE] = judged.prompt_version
+        status.state, status.attempts, status.cost = StageState.DONE, 1, judged.cost
+        outcome = "approved" if judged.verdict.approved else "not approved"
+        status.detail = f"{outcome}, score {judged.verdict.score:.2f}"
+        run.log.append(f"{Stage.CHAPTER_JUDGE}: {status.detail}")
+        store.save(run)
 
     run.state = RunState.DONE
-    run.log.append("Run finished.")
+    run.log.append("Run finished. Nothing is canon until the chapter is accepted.")
     store.save(run)
     return run

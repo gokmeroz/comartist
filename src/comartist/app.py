@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from comartist.adapters import ModelError, build_image_model, build_text_model
+from comartist.agents.chapter_judge import ChapterJudge
 from comartist.agents.critic import Critic
 from comartist.agents.script_writer import ScriptWriter
 from comartist.agents.story_architect import StoryArchitect
@@ -24,6 +25,7 @@ from comartist.models import (
 )
 from comartist.ui.theme import apply_theme, cost_hud, pixel_bar
 from comartist.workflows.store import BriefError, RunStore, chapter_template, parse_brief
+from comartist.tools.canon import CanonStore, accept_chapter, blockers, proposed_facts
 from comartist.tools.character_sheets import approve_sheet, generate_sheet
 from comartist.workflows.panel_loop import PanelLoop, data_url
 from comartist.workflows.script_loop import ScriptLoop
@@ -177,12 +179,13 @@ def start_run(chapter_id: str, settings: RunSettings) -> None:
     run_settings = settings
     if not PROVIDERS[settings.provider].implemented:
         run_settings = settings.model_copy(update={"provider": "stub", "text_model": "stub-text", "image_model": "stub-image"})
-    story_architect = script_loop = visual_director = panel_loop = None
+    story_architect = script_loop = visual_director = panel_loop = chapter_judge = None
     if run_settings.provider != "stub":
         try:
             text_model = build_text_model(run_settings.provider, run_settings.text_model)
             story_architect = StoryArchitect(text_model)
             visual_director = VisualDirector(text_model)
+            chapter_judge = ChapterJudge(text_model)
             panel_loop = PanelLoop(
                 build_image_model(run_settings.provider, run_settings.image_model),
                 Critic(text_model),
@@ -196,7 +199,7 @@ def start_run(chapter_id: str, settings: RunSettings) -> None:
     threading.Thread(
         target=run_stub_pipeline,
         args=(get_store(), chapter_id, run_settings),
-        kwargs={"story_architect": story_architect, "script_loop": script_loop, "visual_director": visual_director, "panel_loop": panel_loop},
+        kwargs={"story_architect": story_architect, "script_loop": script_loop, "visual_director": visual_director, "panel_loop": panel_loop, "chapter_judge": chapter_judge},
         daemon=True,
     ).start()
 
@@ -317,13 +320,15 @@ def render_overview(run: ChapterRun) -> None:
     if run.settings and run.settings.provider == "stub":
         st.info("Stub run: outputs and token counts are simulated. No model was called.")
     elif run.outline:
-        st.info("The Chapter Judge is simulated; earlier stages used real models.")
+        st.info("All stages used real models unless a stage says stub.")
     if run.outline:
         render_outline(run)
     if run.script_critique:
         render_critique(run)
     if run.visual_plan:
         render_visual_plan(run)
+    if run.verdict:
+        render_verdict(run)
     if run.pages:
         render_pages(run)
     elif run.panels:
@@ -443,6 +448,30 @@ def panel_html(panel: PanelResult) -> str:
         f"{art}{bubble}"
         f'<div class="tag">{panel.panel_id} · {badge} {tries}</div></div>'
     )
+
+
+def render_verdict(run: ChapterRun) -> None:
+    verdict = run.verdict
+    st.subheader("Chapter verdict")
+    outcome = "Approved" if verdict.approved else "Not approved"
+    st.markdown(f"**{outcome}** · score {verdict.score:.2f} (uncalibrated estimate)")
+    st.markdown(verdict.summary)
+    for issue in verdict.issues:
+        where = f"page {issue.page}" if issue.page else "chapter"
+        st.markdown(f"- **{issue.category}** ({where}): {issue.evidence} *Repair:* {issue.repair}")
+    st.markdown("**Acceptance**")
+    if run.accepted:
+        st.success("Accepted. Selected facts are in canon.")
+        return
+    problems = blockers(run)
+    if problems:
+        st.warning("Cannot accept: " + "; ".join(problems))
+        return
+    chosen = [fact for fact in proposed_facts(run) if st.checkbox(f"Add to canon: {fact}", key=f"fact-{fact}")]
+    if st.button("Accept chapter"):
+        accept_chapter(CanonStore(Settings().canon_path), run, chosen)
+        get_store().save(run)
+        st.rerun()
 
 
 def render_pages(run: ChapterRun) -> None:

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from comartist.models.critique import ScriptCritique
 from comartist.models.script import Script
 from comartist.models.story import StoryOutline
+from comartist.models.verdict import ChapterVerdict
 from comartist.models.visual import CharacterLook, VisualPlan
 
 
@@ -161,6 +162,8 @@ class ChapterRun(BaseModel):
     panels: list[PanelResult] = Field(default_factory=list)
     pages: list[str] = Field(default_factory=list, description="Lettered page images.")
     pdf: str = ""
+    verdict: ChapterVerdict | None = None
+    accepted: bool = Field(default=False, description="Set only at the acceptance boundary.")
     log: list[str] = Field(default_factory=list)
     error: str = ""
     created: datetime = Field(default_factory=_now)

@@ -113,11 +113,23 @@ def test_bubble_avoids_located_head(tmp_path: Path) -> None:
     assert out.crop(box).tobytes() == original.crop(box).tobytes()
 
 
+LOOKS = [
+    CharacterLook(name="Matt", appearance="curly hair", outfit="teal tee"),
+    CharacterLook(name="Andy", appearance="black hair", outfit="striped shirt"),
+]
+
+
+def test_locate_heads_identifies_people_by_description() -> None:
+    model = FakeTextModel(['{"heads": {}}'])
+    Critic(model).locate_heads("data:x", LOOKS)
+    assert "curly hair" in model.requests[0].messages[1].content
+
+
 def test_locate_heads_drops_invalid_boxes() -> None:
     reply = json.dumps({"heads": {"Matt": [0.1, 0.1, 0.3, 0.3], "Andy": [0.5, 0.5, 0.2, 2]}})
-    heads, _ = Critic(FakeTextModel([reply])).locate_heads("data:x", ["Matt", "Andy"])
+    heads, _ = Critic(FakeTextModel([reply])).locate_heads("data:x", LOOKS)
     assert heads == {"Matt": [0.1, 0.1, 0.3, 0.3]}
 
 
 def test_unreadable_head_reply_is_empty() -> None:
-    assert Critic(FakeTextModel(["nope"])).locate_heads("data:x", ["Matt"])[0] == {}
+    assert Critic(FakeTextModel(["nope"])).locate_heads("data:x", LOOKS)[0] == {}

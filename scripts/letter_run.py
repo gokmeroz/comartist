@@ -17,11 +17,14 @@ from comartist.workflows.store import RunStore
 store = RunStore(Path("runs"))
 run = store.load(sys.argv[1])
 if "--locate" in sys.argv:
-    critic = Critic(build_text_model("meta", "Muse Wonder"))
+    text = build_text_model("meta", "Muse Wonder")
+    critic = Critic(text)
     shots = {shot.panel_id: shot for shot in run.visual_plan.panels}
     spent = 0.0
     for panel in run.panels:
-        panel.heads, cost = critic.locate_heads(data_url(panel.best_image), shots[panel.panel_id].characters)
+        visible = {name.casefold() for name in shots[panel.panel_id].characters}
+        looks = [look for look in run.visual_plan.looks if look.name.casefold() in visible]
+        panel.heads, cost = critic.locate_heads(data_url(panel.best_image), looks)
         spent += cost.usd or 0
     run.stages[Stage.LAYOUT].cost = run.stages[Stage.LAYOUT].cost.add(Cost(usd=spent))
     print(f"located heads for ${spent:.4f}")
