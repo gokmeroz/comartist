@@ -174,12 +174,16 @@ def test_image_parses_known_shapes(body: dict[str, Any]) -> None:
     assert (result.cost.images, result.cost.usd) == (1, 0.01)
 
 
-def test_image_prompt_only_sends_plain_input() -> None:
+def test_image_prompt_only_sends_plain_input_and_size() -> None:
     transport = FakeTransport((200, {"data": [{"b64_json": "x"}]}))
     responses_image(transport).generate(ImageRequest(prompt="A fox"))
     url, payload, _ = transport.calls[0]
     assert url == "https://api.example/v1/responses"
-    assert payload == {"model": "muse-image-1.0", "input": "A fox"}
+    assert payload == {
+        "model": "muse-image-1.0",
+        "input": "A fox",
+        "tools": [{"type": "image_generation", "size": "1024x1024"}],
+    }
 
 
 def test_image_references_are_sent_in_order_with_captions() -> None:

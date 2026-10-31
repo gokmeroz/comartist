@@ -22,6 +22,7 @@ from comartist.models import (
     VisualPlan,
 )
 from comartist.tools.lettering import compose_page, letter_chapter, letter_panel, speaker_positions
+from comartist.tools.page_templates import image_size, slots_for
 
 SHOT = PanelSpec(
     panel_id="p1-1", framing="f", composition="Matt on screen-left, Andy on screen-right.",
@@ -56,10 +57,24 @@ def test_bubbles_are_drawn_on_the_art(tmp_path: Path) -> None:
     assert lettered.tobytes() != plain.tobytes()
 
 
-def test_odd_page_uses_a_wide_first_panel(tmp_path: Path) -> None:
+def test_page_uses_template_slots(tmp_path: Path) -> None:
     paths = [Path(art(tmp_path / f"{n}.png")) for n in range(3)]
-    page = Image.open(compose_page(paths, tmp_path / "page.png"))
-    assert page.width == 2000 and page.height > 1500
+    page = Image.open(compose_page(paths, slots_for("hero_top", 3), tmp_path / "page.png"))
+    assert page.size == (2000, 3000)
+
+
+def test_panel_is_cropped_to_its_slot(tmp_path: Path) -> None:
+    out = letter_panel(art(tmp_path / "in.png"), PANEL, SHOT, tmp_path / "out.png", (500, 900))
+    assert Image.open(out).size == (500, 900)
+
+
+def test_templates_pick_a_matching_generation_size() -> None:
+    assert image_size(slots_for("tall_left", 3)[0]) == "1024x1536"
+    assert image_size(slots_for("three_strips", 3)[0]) == "1536x1024"
+
+
+def test_unknown_template_falls_back_to_one_with_the_right_count() -> None:
+    assert len(slots_for("nope", 4)) == 4 and len(slots_for("nope", 7)) == 7
 
 
 def chapter(tmp_path: Path, image: str) -> ChapterRun:
