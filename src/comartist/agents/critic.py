@@ -7,7 +7,7 @@ that the agent raises rather than treating an unreadable verdict as approval.
 from pydantic import BaseModel, Field
 
 from comartist.adapters import ChatMessage, TextModel, TextRequest
-from comartist.agents.parsing import parse_json
+from comartist.agents.parsing import chapter_max_tokens, parse_json
 from comartist.models.critique import PanelCritique, ScriptCritique
 from comartist.models.run import ChapterSpec, Cost
 from comartist.models.script import Script
@@ -112,7 +112,7 @@ class Critic:
         cost, rejected = Cost(), []
         for _ in range(self._max_attempts):
             reply = self._model.complete(
-                TextRequest(messages=messages, temperature=0.2, max_tokens=4000, json_mode=True)
+                TextRequest(messages=messages, temperature=0.2, max_tokens=chapter_max_tokens(4000, spec.target_pages), json_mode=True)
             )
             cost = cost.add(reply.cost)
             critique, problems = parse_json(reply.text, ScriptCritique)

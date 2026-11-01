@@ -35,4 +35,4 @@ tone:
   - bittersweet
 
 # Pages to generate (1-40). Keep it small while testing.
-target_pages: 4
+target_pages: 12

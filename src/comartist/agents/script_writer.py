@@ -8,7 +8,7 @@ the script is still invalid the agent raises with every problem it saw.
 from pydantic import BaseModel, Field
 
 from comartist.adapters import ChatMessage, TextModel, TextRequest
-from comartist.agents.parsing import parse_json
+from comartist.agents.parsing import chapter_max_tokens, parse_json
 from comartist.models.critique import ScriptCritique
 from comartist.models.run import ChapterSpec, Cost
 from comartist.models.script import Script
@@ -106,7 +106,7 @@ class ScriptWriter:
         cost, rejected = Cost(), []
         for attempt in range(1, self._max_attempts + 1):
             reply = self._model.complete(
-                TextRequest(messages=messages, temperature=0.8, max_tokens=12000, json_mode=True)
+                TextRequest(messages=messages, temperature=0.8, max_tokens=chapter_max_tokens(12000, spec.target_pages), json_mode=True)
             )
             cost = cost.add(reply.cost)
             script, problems = parse_script(reply.text)

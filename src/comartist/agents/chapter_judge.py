@@ -8,7 +8,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from comartist.adapters import ChatMessage, TextModel, TextRequest
-from comartist.agents.parsing import parse_json
+from comartist.agents.parsing import chapter_max_tokens, parse_json
 from comartist.models.run import ChapterSpec, Cost
 from comartist.models.script import Script
 from comartist.models.verdict import ChapterVerdict
@@ -53,7 +53,7 @@ class ChapterJudge:
         cost, rejected = Cost(), []
         for _ in range(self._max_attempts):
             reply = self._model.complete(
-                TextRequest(messages=messages, temperature=0.2, max_tokens=16000, json_mode=True, images=images)
+                TextRequest(messages=messages, temperature=0.2, max_tokens=chapter_max_tokens(16000, spec.target_pages), json_mode=True, images=images)
             )
             cost = cost.add(reply.cost)
             verdict, problems = parse_json(reply.text, ChapterVerdict)
