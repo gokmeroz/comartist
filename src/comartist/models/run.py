@@ -114,6 +114,7 @@ class PanelResult(BaseModel):
     caption: str = ""
     dialogue: str = ""
     attempts: list[PanelAttempt] = Field(default_factory=list)
+    interrupted: bool = Field(default=False, description="An error stopped its loop; resume retries it.")
     heads: dict[str, list[float]] = Field(
         default_factory=dict,
         description="Character -> head box [left, top, right, bottom], as fractions of the image.",

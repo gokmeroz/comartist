@@ -116,7 +116,7 @@ def _real_panels(store: RunStore, run: ChapterRun, settings: RunSettings, loop: 
     folder = store.root / run.chapter_id / "panels"
     folder.mkdir(exist_ok=True)
     for number, panel in enumerate(run.panels):
-        if panel.attempts:  # already tried, on a run being resumed
+        if panel.attempts and not panel.interrupted:  # already tried, on a run being resumed
             continue
         remaining = settings.chapter_budget_usd - (run.cost.usd or 0)
         if remaining <= 0:
@@ -128,7 +128,8 @@ def _real_panels(store: RunStore, run: ChapterRun, settings: RunSettings, loop: 
         result = loop.run(
             run.spec, run.visual_plan, shots[panel.panel_id], actions[panel.panel_id], folder, remaining
         )
-        panel.attempts = result.attempts
+        panel.attempts = [*panel.attempts, *result.attempts]  # keep paid-for attempts from before an error
+        panel.interrupted = bool(result.error)
         status.attempts += len(result.attempts)
         status.cost = status.cost.add(result.cost)
         status.detail = f"{number + 1}/{len(run.panels)} panels"

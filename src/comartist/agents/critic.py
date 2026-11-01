@@ -65,7 +65,7 @@ class Critic:
                 TextRequest(
                     messages=messages,
                     temperature=0.2,
-                    max_tokens=4000,
+                    max_tokens=12000,  # includes hidden reasoning; 4000 ran out on busy panels
                     json_mode=True,
                     images=[image, *references],
                 )
