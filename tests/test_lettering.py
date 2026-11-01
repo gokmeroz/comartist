@@ -1,6 +1,7 @@
 """Lettering and layout: bubble content, speaker positions, page composition, and export."""
 
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -21,7 +22,7 @@ from comartist.models import (
     ScriptPanel,
     VisualPlan,
 )
-from comartist.tools.lettering import compose_page, letter_chapter, letter_panel, speaker_positions
+from comartist.tools.lettering import _place, compose_page, letter_chapter, letter_panel, speaker_positions
 from comartist.tools.page_templates import image_size, slots_for
 
 SHOT = PanelSpec(
@@ -111,6 +112,15 @@ def test_bubble_avoids_located_head(tmp_path: Path) -> None:
     w, h = out.size
     box = (int(.1 * w) + 20, 0, int(.5 * w) - 20, int(.5 * h) - 20)  # a tail may touch the head's edge
     assert out.crop(box).tobytes() == original.crop(box).tobytes()
+
+
+def test_bubble_stays_nearer_its_speaker_than_anyone_else() -> None:
+    # Matt's head touches the top edge, so there is no room above him; Andy stands to his right.
+    matt, andy = (300.0, 60.0), (700.0, 40.0)
+    heads = [(220, 60, 380, 260), (620, 40, 780, 240)]
+    box = _place((360, 90), (1200, 800), matt, heads, others=[andy])
+    center = ((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
+    assert math.dist(center, matt) < math.dist(center, andy)
 
 
 LOOKS = [

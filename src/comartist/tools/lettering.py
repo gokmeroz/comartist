@@ -75,8 +75,13 @@ def _place(
     target: tuple[float, float],
     blocked: list[Box],
     after: Box | None = None,
+    others: list[tuple[float, float]] | None = None,
 ) -> Box:
-    """Pick the free spot nearest the speaker, preferring above them; covering a head costs most."""
+    """Pick the free spot nearest the speaker, preferring above them; covering a head costs most.
+
+    A spot nearer another character's head than the speaker's would read as theirs, so it
+    costs as much as covering the whole bubble with a head.
+    """
     width, height = size
     best, best_cost = None, float("inf")
     for top in range(MARGIN, max(MARGIN + 1, canvas[1] - height - MARGIN), 30):
@@ -89,6 +94,10 @@ def _place(
             covered = sum(_overlap(box, item) for item in blocked)
             distance = abs(left + width / 2 - target[0]) + abs(top + height - target[1])
             cost = covered * 100 + distance + (0 if top + height <= target[1] else canvas[1])
+            center = (left + width / 2, top + height / 2)
+            own = math.dist(center, target)
+            if any(math.dist(center, other) < own for other in others or []):
+                cost += 2 * canvas[1] + 100 * width * height
             if cost < best_cost:
                 best, best_cost = box, cost
     return best or (MARGIN, MARGIN, MARGIN + width, MARGIN + height)
@@ -158,7 +167,10 @@ def letter_panel(
         y = head[1] if head else h * 0.4
         wrapped, text_width, text_height = _text_box(draw, line.text, font)
         size = (text_width + 2 * PADDING, text_height + 2 * PADDING)
-        box = _place(size, (w, h), (x, y), blocked, previous)
+        others = [
+            ((box[0] + box[2]) / 2, box[1]) for name, box in head_boxes.items() if name != line.speaker.casefold()
+        ]
+        box = _place(size, (w, h), (x, y), blocked, previous, others)
         previous = box
         blocked.append(box)
         bubbles.append((wrapped, box, _tail_tip(box, head, x, y)))

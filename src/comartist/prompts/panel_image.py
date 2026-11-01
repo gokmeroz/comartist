@@ -2,7 +2,7 @@
 
 from comartist.models.visual import CharacterLook, PanelSpec
 
-VERSION = "panel_image/v3"
+VERSION = "panel_image/v4"
 
 
 def build(
@@ -18,7 +18,10 @@ def build(
     ]
     if place:
         lines.append(f"Real-world location, match its streets and architecture exactly: {place}")
-    lines.append("Keep the top quarter of the image clear of faces, for speech balloons.")
+    lines.append(
+        "Fill the whole frame with artwork, edge to edge; never leave blank or flat-colour bands. "
+        "Keep faces out of the top quarter: show background scenery there, for speech balloons."
+    )
     lines += [f"{look.name}: {look.appearance} Outfit: {look.outfit}" for look in looks]
     lines += [f"Must fix: {repair}" for repair in repairs]
     lines.append("No text, letters, captions, speech balloons, or panel borders in the image.")

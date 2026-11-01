@@ -73,6 +73,24 @@ def test_resume_generates_only_missing_panels_and_finishes(tmp_path: Path) -> No
     assert saved.state is RunState.DONE and saved.verdict.approved and saved.pages
 
 
+def test_resume_retries_a_panel_an_error_interrupted(tmp_path: Path) -> None:
+    store = RunStore(tmp_path)
+    run = stopped_run(store, tmp_path)
+    run.panels[1].attempts = [PanelAttempt(attempt=1, accepted=False, failure="CRITIC_ERROR")]
+    run.panels[1].interrupted = True
+    store.save(run)
+    text, images = FakeTextModel([APPROVED, '{"heads": {}}', '{"heads": {}}', VERDICT]), FakeImageModel()
+    loop = PanelLoop(images, Critic(text), VisualDirector(text))
+
+    resume_pipeline(store, run.chapter_id, SETTINGS, loop, ChapterJudge(text))
+    saved = store.load(run.chapter_id)
+
+    assert len(images.requests) == 1
+    assert saved.panels[1].accepted and not saved.panels[1].interrupted
+    assert saved.panels[1].attempts[0].failure == "CRITIC_ERROR"  # the earlier attempt stays on record
+    assert saved.state is RunState.DONE
+
+
 def test_crash_is_recorded_on_the_run(tmp_path: Path) -> None:
     store = RunStore(tmp_path)
     run = store.create(chapter_template())
