@@ -22,7 +22,7 @@ class ChapterSpec(BaseModel):
     canon: list[str] = Field(default_factory=list, description="Facts agents must not change.")
     premise: str = Field(min_length=1)
     tone: list[str] = Field(default_factory=list)
-    target_pages: int = Field(default=4, ge=1, le=40)
+    target_pages: int = Field(default=12, ge=1, le=40)
     references: dict[str, str] = Field(
         default_factory=dict,
         description="Character name -> approved reference image (file path or URL).",
@@ -148,7 +148,7 @@ class RunSettings(BaseModel):
     image_model: str
     max_script_attempts: int = Field(default=3, ge=1, le=10)
     max_panel_attempts: int = Field(default=3, ge=1, le=10)
-    chapter_budget_usd: float = Field(default=5.0, gt=0)
+    chapter_budget_usd: float = Field(default=10.0, gt=0)
 
 
 def _now() -> datetime:

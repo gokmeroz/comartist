@@ -14,7 +14,7 @@ SETTINGS = RunSettings(provider="stub", text_model="stub-text", image_model="stu
 def test_template_is_a_valid_brief() -> None:
     spec = parse_brief(chapter_template())
     assert spec.characters == ["Matt", "Andy"]
-    assert spec.target_pages == 4
+    assert spec.target_pages == 12
 
 
 @pytest.mark.parametrize(
@@ -69,7 +69,7 @@ def test_stub_run_records_panel_attempts_and_exhaustion(tmp_path: Path) -> None:
     chapter_id = store.create(chapter_template()).chapter_id
 
     full = run_stub_pipeline(store, chapter_id, SETTINGS, sleep=lambda _: None)
-    assert len(full.panels) == 16
+    assert len(full.panels) == 48
     assert all(panel.accepted for panel in full.panels)
     retried = [panel for panel in full.panels if len(panel.attempts) > 1]
     assert retried and all(not attempt.accepted for attempt in retried[0].attempts[:-1])

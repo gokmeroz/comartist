@@ -23,3 +23,11 @@ def parse_json[T: BaseModel](text: str, schema: type[T]) -> tuple[T | None, list
             f"{'.'.join(str(part) for part in issue['loc']) or 'root'}: {issue['msg']}"
             for issue in error.errors()
         ]
+
+
+TOKENS_PER_PAGE = 4000
+
+
+def chapter_max_tokens(floor: int, pages: int) -> int:
+    """Token cap for a whole-chapter call. Hidden reasoning counts, and it grows with page count."""
+    return max(floor, TOKENS_PER_PAGE * pages)

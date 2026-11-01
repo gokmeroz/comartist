@@ -131,11 +131,11 @@ def run_with(tmp_path: Path, model: FakeTextModel):
 
 
 def test_pipeline_uses_real_story_architect(tmp_path: Path) -> None:
-    template_pages = [1, 2, 3, 4]
+    template_pages = list(range(1, 13))
     run, saved = run_with(tmp_path, FakeTextModel([outline_json(pages=template_pages)]))
 
     assert run.state is RunState.DONE
-    assert saved.outline is not None and len(saved.outline.beats) == 4
+    assert saved.outline is not None and len(saved.outline.beats) == 12
     assert saved.prompt_versions[Stage.STORY_ARCHITECT] == prompt.VERSION
     assert saved.stages[Stage.STORY_ARCHITECT].attempts == 1
 
