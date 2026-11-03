@@ -40,11 +40,22 @@ An automated continuity check passes 12 of 12 checks. Both characters keep their
 
 This is one evaluation pair, so it shows the system working, not a general success rate. Some panels needed manual regeneration or a resume after errors.
 
+I also used it on my own sci-fi story, planned as ten chapters:
+
+| Chapter | Panels | Pages | Judge score (uncalibrated) | Status |
+|---|---:|---:|---:|---|
+| 1: The Journey Begins | 48 | 12 | 0.82 | Accepted |
+| 2: Welcome to 2016 | 20 | 4 | 0.92 | Judge approved, not accepted |
+
+Chapter 1 was first scored 0.45. The Judge's issues pointed at specific panels and one missing story beat, and after targeted redraws and a small script edit that added the missing beat, it approved the chapter. It cost $10.03. Chapter 2 carries over chapter 1's canon, locked faces, and approved references, with new outfits. The Judge approved it, but 4 of its 20 panels never passed the Critic, so the acceptance rule still blocks it. An 8-page version of chapter 2 failed twice, because the API dropped the larger requests.
+
 ## Challenges
 
 - **Continuity inside a scene, not only across chapters.** One panel lost the rainy night and had to be redrawn with an explicit note.
 - **The Critic running out of tokens.** Hidden reasoning counts against the limit, so busy panels hit a 4,000-token cap and failed on every attempt until it was raised.
 - **Failures in long runs.** Network errors and content filters can stop a chapter partway, so runs now resume while keeping finished panels.
+- **Large requests getting dropped.** The API kept closing the connection on the biggest calls: the Chapter Judge reading 12 pages, and the Script Writer and Visual Director planning 8 pages. Small requests still worked. Retrying just the failed stage, and keeping chapters to about 4 pages, got runs through.
+- **Content filters on harmless scenes.** Some panels were refused repeatedly, such as a character hanging upside down from a portal. Rewording the action in neutral terms fixed some, but not all.
 - **Lettering.** Bubble order, tails pointing at the right speaker, and tails crossing other bubbles all needed fixes. Text is drawn by code rather than by the image model.
 
 ## What I'm proud of
@@ -59,6 +70,8 @@ Consistency is a systems problem more than a prompting problem. Locked reference
 
 ## What's next
 
+- Generating panels in parallel. They run one at a time today, so an 8-page chapter takes about an hour.
+- Splitting large requests into smaller ones, so the Judge and planners stop hitting the API's limits.
 - A human approval step for the script before panels are generated.
 - Persistent long-term memory with PostgreSQL and Qdrant, and proper temporal memory for flashbacks.
 - Comparing critic judgments against human judgments to calibrate the scores.

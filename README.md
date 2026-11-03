@@ -71,12 +71,15 @@ uv run streamlit run src/comartist/app.py
 
 The stub provider runs the whole UI offline with simulated output. For real generation, set `COMARTIST_META_API_KEY` in your environment or `.env`, and pick the Meta provider in the sidebar.
 
-To reproduce the two-chapter evaluation (costs real credits, about $5):
+To reproduce the two-chapter evaluation (costs real credits, about $7 for both chapters):
 
 ```sh
 uv run python scripts/run_continuity_demo.py
 uv run python scripts/check_continuity.py <chapter-1-run-id> <chapter-2-run-id>
 ```
+
+The demo script creates chapter 1 from `evals/continuity/chapter-1.yaml` on a fresh clone, then
+runs, accepts, and continues it into chapter 2. A chapter the Judge rejects is left unaccepted.
 
 ## 🏁 Hackathon Context
 
