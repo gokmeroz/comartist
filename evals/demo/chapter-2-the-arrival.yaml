@@ -1,0 +1,66 @@
+# ComArtist - chapter 2 of 10, continuing "Chapter 1 - The Journey Begins".
+# Save with "Continue from..." UNTICKED: this brief already carries chapter 1's canon,
+# locked faces and approved reference images, without the unrelated Matt & Andy chapters.
+
+title: "Chapter 2 - Welcome to 2016"
+
+# When and where the chapter takes place.
+timeframe: "Summer 2016"
+location: "Istanbul, Earth"
+
+# Characters appearing in this chapter (names, exactly as in chapter 1).
+characters:
+  - G. Maert O'zd
+  - An Alien from Saturn
+  - The Dark Lord
+
+# What happens, in a few sentences. The agents fill in the rest.
+premise: >
+  G. Maert O'zd and An Alien from Saturn tumble out of the Dark Lord's portal
+  into a busy Istanbul street in Summer 2016. Disguised as ordinary tourists,
+  they keep up their fake best-friend act while the Alien hunts for
+  "multiverse anchors" and G. Maert O'zd secretly tries to learn the real plan.
+  The Dark Lord checks in by hologram, impatient, and orders them to stay
+  until the job is done.
+
+# Canon: facts the agents must NOT change.
+canon:
+  # Carried from chapter 1 (Summer 2084).
+  - "As of Summer 2084: Alien started working for the intergalactic army in 2080 and constantly makes jokes about his hometown."
+  - "As of Summer 2084: G. Maert O'zd's grandfather is from Istanbul and was an AI Engineer in the 2030s."
+  - "As of Summer 2084: Alien is a double agent working for the Dark Lord, who secretly wants 2016 back to buy Bitcoins but only ever claims he must alter the multiverse."
+  - "As of Summer 2084: The Alien recruited G. Maert O'zd for the 2016 mission because of his grandfather's AI engineering background."
+  - "As of Summer 2084: G. Maert O'zd pretends to accept the Dark Lord's 2016 mission to avoid capture and learn more about the plan."
+  - "As of Summer 2084: The Dark Lord opened a portal to 2016 and made G. Maert O'zd enter it first, ahead of the Alien."
+  # New in this chapter.
+  - The portal lands them in Istanbul in Summer 2016.
+  - The Dark Lord stays in 2084 and appears only as a glowing red hologram.
+  - G. Maert O'zd knows the Alien is a double agent; the Alien does not know he knows.
+  - The Dark Lord never says the word "Bitcoin" or mentions buying anything; he only talks about the multiverse.
+
+# Faces locked from chapter 1. Only the outfits below change.
+locked_looks:
+  - name: "G. Maert O'zd"
+    appearance: "Late-20s man, 5'10\", athletic medium build, warm light-tan skin, short wavy dark-brown hair slightly tousled, clean-shaven with a soft jaw, dark-brown eyes, small mole on his left cheek"
+    outfit: "Plain white t-shirt, faded blue jeans, red sneakers, black backpack, cheap tourist sunglasses."
+  - name: "An Alien from Saturn"
+    appearance: "Tall slender Saturnian, 6'4\", long-limbed lean build, smooth pale lavender skin, bald elongated head with a thin gold ring-like cranial crest, large amber eyes, narrow chin, small pointed ears, and four-fingered hands"
+    outfit: "Oversized beige trench coat with the collar up, wide-brimmed hat, big dark sunglasses, white gloves on his four-fingered hands."
+  - name: "The Dark Lord"
+    appearance: "Imposing 7-foot broad-shouldered figure, pale ash-gray skin, gaunt sharp-cheeked face, glowing crimson eyes, short black hair slicked back, heavy brow, and stern mouth"
+    outfit: "Black obsidian plate armor with a jagged horned helmet pushed back, long crimson cape, circular gold coin-like medallion with no lettering; always shown as a red-tinted hologram."
+
+# Approved reference images from chapter 1.
+references:
+  "G. Maert O'zd": runs/chapter-1-the-journey-begins/references/g-maert-o-zd-1.png
+  "An Alien from Saturn": runs/chapter-1-the-journey-begins/references/an-alien-from-saturn-1.png
+  "The Dark Lord": runs/chapter-1-the-journey-begins/references/the-dark-lord-2.png
+
+# Mood words.
+tone:
+  - funny
+  - nostalgic
+  - sci-fi
+
+# Pages to generate (1-40). 4 keeps the run short and the Chapter Judge request small.
+target_pages: 4

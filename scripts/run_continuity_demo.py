@@ -1,8 +1,9 @@
-"""Run the two-chapter continuity demo end to end on Meta, then check it. Costs real credits (~$5).
+"""Run the two-chapter continuity demo end to end on Meta, then check it. Costs real credits (~$7).
 
     uv run python scripts/run_continuity_demo.py [chapter-1 run id]
 
-Re-runs chapter 1 if it has no approved verdict, accepts it (committing no proposed facts),
+Creates chapter 1 from evals/continuity/chapter-1.yaml if that run does not exist yet, runs it
+if it has no approved verdict, accepts it (committing no proposed facts),
 creates chapter 2 from evals/continuity/chapter-2.yaml with carry-over, runs and accepts it,
 then runs scripts/check_continuity.py. A chapter the Judge rejects is left unaccepted.
 """
@@ -27,6 +28,7 @@ from comartist.workflows.store import RunStore
 from comartist.workflows.stub_pipeline import run_guarded, run_stub_pipeline
 
 SETTINGS = RunSettings(provider="meta", text_model="Muse Wonder", image_model="Muse Image")
+CHAPTER_1 = Path(__file__).resolve().parent.parent / "evals" / "continuity" / "chapter-1.yaml"
 CHAPTER_2 = Path(__file__).resolve().parent.parent / "evals" / "continuity" / "chapter-2.yaml"
 
 
@@ -63,7 +65,12 @@ def accept(store: RunStore, canon: CanonStore, run: ChapterRun) -> bool:
 def main(first_id: str = "chapter-1-the-reunion") -> int:
     settings = Settings()
     store, canon = RunStore(settings.runs_dir), CanonStore(settings.canon_path)
-    first = store.load(first_id)
+    if (store.root / first_id / "run.json").exists():
+        first = store.load(first_id)
+    else:  # fresh clone: create chapter 1 from the fixed evaluation brief
+        first = store.create(CHAPTER_1.read_text())
+        first_id = first.chapter_id
+        print(f"Created {first_id} from {CHAPTER_1.name}")
     if not first.accepted:
         if not (first.verdict and first.verdict.approved):
             first = run_chapter(store, first_id)
