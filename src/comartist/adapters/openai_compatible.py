@@ -48,6 +48,10 @@ class UrllibTransport:
         try:
             with urllib.request.urlopen(request, timeout=timeout_s) as response:
                 content_type = response.headers.get("Content-Type", "")
+                if content_type.startswith("text/event-stream"):
+                    body = _read_stream(response)
+                    # A stream that breaks after a 200 header is still a server-side failure.
+                    return (502 if body.get("error") else response.status), body
                 raw = response.read()
                 if content_type.startswith("image/"):
                     # Some image endpoints answer with the bytes; normalise to the JSON shape.
@@ -58,6 +62,31 @@ class UrllibTransport:
                 return response.status, _parse(raw)
         except urllib.error.HTTPError as error:
             return error.code, _parse(error.read())
+
+
+FINAL_EVENTS = {"response.completed", "response.incomplete", "response.failed"}
+
+
+def _read_stream(lines: Any) -> dict[str, Any]:
+    """Responses API SSE: the final event carries the full response body, same as `stream: false`.
+
+    Streaming exists only to keep the connection busy; Meta drops calls silent for 60s.
+    """
+    for raw in lines:
+        line = raw.decode(errors="replace").strip()
+        if not line.startswith("data:"):
+            continue
+        try:
+            event = json.loads(line[5:].strip())
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") == "error":
+            return {"error": event.get("error") or {"message": str(event)[:300]}}
+        if event.get("type") in FINAL_EVENTS and isinstance(event.get("response"), dict):
+            return event["response"]
+    return {"error": {"message": "Stream ended without a final response"}}
 
 
 def _parse(raw: bytes) -> dict[str, Any]:
@@ -160,7 +189,7 @@ class ResponsesText(_Client):
             ],
             "temperature": request.temperature,
             "max_output_tokens": request.max_tokens,
-            "stream": False,
+            "stream": True,  # keeps long calls alive; Meta drops connections silent for 60s
         }
         if request.json_mode:
             payload["text"] = {"format": {"type": "json_object"}}
