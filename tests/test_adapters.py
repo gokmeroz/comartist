@@ -1,6 +1,6 @@
-import json
 """Model adapters: request shape, error mapping, fallback, and factory wiring. No network."""
 
+import json
 from typing import Any
 
 import pytest
