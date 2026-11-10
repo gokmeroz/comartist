@@ -291,6 +291,15 @@ def test_retries_exhausted_then_falls_back() -> None:
     assert len(transport.calls) == 4
 
 
+def test_without_backup_transient_errors_are_retried_longer() -> None:
+    dropped = (503, {"error": {"message": "connection closed"}})
+    waits: list[float] = []
+    transport = FakeTransport(*[dropped] * 5, (200, responses_body("ok")))
+    model = build_text_model("meta", "Muse Wonder", endpoints(None), transport, sleep=waits.append)
+    assert model.complete(REQUEST).provider == "meta"
+    assert waits == [2.0, 4.0, 8.0, 16.0, 32.0]
+
+
 def test_quota_is_not_retried() -> None:
     transport = FakeTransport((402, {"error": {"message": "no credits"}}))
     model = build_text_model("meta", "Muse Wonder", endpoints(None), transport, sleep=no_sleep)

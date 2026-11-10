@@ -21,6 +21,9 @@ from comartist.adapters.openai_compatible import (
 from comartist.config import EndpointSettings, FireworksSettings, MetaSettings
 
 FALLBACK_PROVIDER = "fireworks"
+# With no backup provider, a brief outage would otherwise end the run, so wait it out longer
+# (2+4+8+16+32 = ~62s of backoff instead of ~6s).
+SOLO_RETRIES = 5
 TEXT_CLASSES = {"responses": ResponsesText, "chat_completions": ChatCompletionsText}
 IMAGE_CLASSES = {
     "responses": ResponsesImage,
@@ -75,6 +78,10 @@ def _chain(
     return chain
 
 
+def _retry_kwargs(chain: list) -> dict[str, int]:
+    return {"retries": SOLO_RETRIES} if len(chain) == 1 else {}
+
+
 def build_text_model(
     provider: str,
     label: str,
@@ -84,7 +91,8 @@ def build_text_model(
 ) -> TextModel:
     if provider == "stub":
         return FakeTextModel(provider="stub", model=label)
-    return FallbackText(_chain("text", provider, label, endpoints, transport), sleep=sleep)
+    chain = _chain("text", provider, label, endpoints, transport)
+    return FallbackText(chain, sleep=sleep, **_retry_kwargs(chain))
 
 
 def build_image_model(
@@ -96,4 +104,5 @@ def build_image_model(
 ) -> ImageModel:
     if provider == "stub":
         return FakeImageModel(provider="stub", model=label)
-    return FallbackImage(_chain("image", provider, label, endpoints, transport), sleep=sleep)
+    chain = _chain("image", provider, label, endpoints, transport)
+    return FallbackImage(chain, sleep=sleep, **_retry_kwargs(chain))
