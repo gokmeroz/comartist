@@ -1,3 +1,4 @@
+import json
 """Model adapters: request shape, error mapping, fallback, and factory wiring. No network."""
 
 from typing import Any
@@ -82,7 +83,7 @@ def test_responses_text_request_shape_and_cost() -> None:
         {"role": "system", "content": "Be brief."},
         {"role": "user", "content": [{"type": "input_text", "text": "Hello"}]},
     ]
-    assert payload["stream"] is False
+    assert payload["stream"] is True
     assert payload["text"] == {"format": {"type": "json_object"}}
     assert headers["Authorization"] == "Bearer sk-test-secret"
     assert result.text == "Hi there"
@@ -290,6 +291,15 @@ def test_retries_exhausted_then_falls_back() -> None:
     assert len(transport.calls) == 4
 
 
+def test_without_backup_transient_errors_are_retried_longer() -> None:
+    dropped = (503, {"error": {"message": "connection closed"}})
+    waits: list[float] = []
+    transport = FakeTransport(*[dropped] * 5, (200, responses_body("ok")))
+    model = build_text_model("meta", "Muse Wonder", endpoints(None), transport, sleep=waits.append)
+    assert model.complete(REQUEST).provider == "meta"
+    assert waits == [2.0, 4.0, 8.0, 16.0, 32.0]
+
+
 def test_quota_is_not_retried() -> None:
     transport = FakeTransport((402, {"error": {"message": "no credits"}}))
     model = build_text_model("meta", "Muse Wonder", endpoints(None), transport, sleep=no_sleep)
@@ -371,3 +381,23 @@ def test_settings_read_keys_from_dotenv(tmp_path, monkeypatch) -> None:
     (tmp_path / ".env").write_text("COMARTIST_META_API_KEY=from-dotenv\nUNRELATED=1\n")
     assert MetaSettings().api_key.get_secret_value() == "from-dotenv"
     assert PROVIDERS["meta"].key_present()
+
+
+def test_stream_returns_the_final_response_body() -> None:
+    from comartist.adapters.openai_compatible import _read_stream
+
+    final = {"output_text": "ok", "usage": {"input_tokens": 1, "output_tokens": 2}}
+    lines = [
+        b"event: response.created\n",
+        b'data: {"type": "response.created", "response": {"status": "in_progress"}}\n',
+        b"\n",
+        b'data: {"type": "response.output_text.delta", "delta": "o"}\n',
+        b"data: " + json.dumps({"type": "response.completed", "response": final}).encode() + b"\n",
+    ]
+    assert _read_stream(lines) == final
+
+
+def test_stream_without_final_event_is_an_error() -> None:
+    from comartist.adapters.openai_compatible import _read_stream
+
+    assert _read_stream([b'data: {"type": "response.output_text.delta", "delta": "o"}\n'])["error"]
