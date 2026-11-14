@@ -13,10 +13,12 @@ execution. Generation produces a candidate, not an automatically accepted
 result. Candidates must be evaluated, and revisions should address specific
 failures rather than blindly repeat generation.
 
-The repository currently contains an initial Python scaffold with three domain
-models and a minimal Streamlit input page. No AI agents or orchestration are
-implemented. Keep foundation work minimal; introduce later architecture only
-when requested.
+The project was built out for the Meta Global AI Developer Hackathon
+(Oct 26 – Nov 4, 2026) and is now in a post-hackathon hardening phase. All five
+agent roles, the script and panel revision loops, lettering/layout, the Chapter
+Judge, the acceptance boundary, and a two-chapter continuity demo exist. Prefer
+consolidating and testing what exists over adding new architecture; introduce
+new components only when requested.
 
 The README provides broader project context. The architecture below captures
 the current implementation direction and supersedes the README's broader agent
@@ -175,14 +177,50 @@ Track canon violations, character identity, visual continuity, script alignment,
 narrative coherence, first-pass acceptance, attempts per accepted panel, cost,
 and human preference. README numerical targets are aspirational until measured.
 
-## Current implementation plan
+## Current implementation state
 
-The initial scaffold uses Python 3.12+, uv, a `src/` layout, Pydantic,
-pydantic-settings, Streamlit, and pytest. Run tests with `uv run pytest` and the
-UI with `uv run streamlit run src/comartist/app.py`. No formatter or linter is
-currently configured.
+Python 3.12+, uv, `src/` layout, Pydantic, pydantic-settings, LangGraph,
+Pillow, Streamlit, and pytest. Run tests with `uv run pytest` and the UI with
+`uv run streamlit run src/comartist/app.py`. No formatter, linter, or CI
+workflow is configured yet.
 
-The following phases describe future implementation, beyond this scaffold.
+Layout of `src/comartist/`:
+
+- `agents/`: Story Architect, Script Writer, Visual Director, Critic (script
+  and panel modes), Chapter Judge.
+- `prompts/`: versioned prompts, one module per agent or mode.
+- `workflows/`: `script_loop.py` and `panel_loop.py` are LangGraph loops with
+  bounded attempts and failure-category routing. `stub_pipeline.py` runs the
+  chapter stages in sequence (real or stubbed per stage), plus resume and
+  single-panel regeneration. `store.py` writes one run folder per chapter.
+- `tools/`: acceptance boundary (`canon.py`), character sheets, lettering with
+  tailed speech bubbles, page templates, continuity checks.
+- `memory/continuity.py`: carries accepted canon and approved looks into the
+  next chapter with story time attached.
+- `adapters/`: model access through an OpenAI-compatible adapter (Responses or
+  Chat Completions), a fallback wrapper, and a fake adapter for tests.
+- `config.py`: providers. Meta Model API (Muse Wonder text, Muse Image) is the
+  primary; Fireworks (Llama, FLUX) is the fallback. FLUX takes no reference
+  images, so fallback panels lose character conditioning.
+
+Live smoke and probe scripts live in `scripts/`; their outputs go to the
+git-ignored `smoke_results/`.
+
+Known gaps and debt:
+
+- Canon and runs are stored as JSON on disk (`runs/canon.json`). PostgreSQL,
+  Qdrant, and the temporal "who knows what, when" model are not implemented.
+- The chapter-level pipeline is not a LangGraph graph, and `stub_pipeline.py`
+  is misnamed: it runs real stages. Its docstring is out of date.
+- Several `scripts/fix_*.py` and `resume_from_visual_director.py` are one-off
+  manual repairs from the demo. They should become judge-driven repair and
+  resume features.
+- LiteLLM and vLLM are not used. Visual consistency relies on reference sheets
+  and prompting; LoRA, IP-Adapter, and ControlNet are untried.
+- No Docker packaging and no frozen evaluation baseline.
+
+The phases below are the original plan. Phases 1–4 are implemented in a first
+form (see the gaps above); phases 5–7 remain.
 
 1. **Typed foundations and evaluation fixtures:** Define domain schemas,
    candidate versus accepted state, minimal canon and temporal interfaces,
