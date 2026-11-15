@@ -181,8 +181,9 @@ and human preference. README numerical targets are aspirational until measured.
 
 Python 3.12+, uv, `src/` layout, Pydantic, pydantic-settings, LangGraph,
 Pillow, Streamlit, and pytest. Run tests with `uv run pytest` and the UI with
-`uv run streamlit run src/comartist/app.py`. No formatter, linter, or CI
-workflow is configured yet.
+`uv run streamlit run src/comartist/app.py`. GitHub Actions
+(`.github/workflows/tests.yml`) runs `uv sync --locked` and pytest with
+coverage on every push and pull request. No formatter or linter is configured.
 
 Layout of `src/comartist/`:
 
