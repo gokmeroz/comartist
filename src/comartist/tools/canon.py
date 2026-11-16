@@ -2,6 +2,7 @@
 
 import threading
 from pathlib import Path
+from typing import Protocol
 
 from pydantic import BaseModel, Field
 
@@ -13,12 +14,48 @@ class AcceptanceError(Exception):
     pass
 
 
+class CanonRepository(Protocol):
+    """Accepted canon. Implementations must make `commit` idempotent per (chapter, text)."""
+
+    def facts(self) -> list[CanonFact]: ...
+
+    def commit(self, chapter_id: str, story_time: str, texts: list[str]) -> list[CanonFact]: ...
+
+
+def _new_facts(existing: list[CanonFact], chapter_id: str, story_time: str, texts: list[str]) -> list[CanonFact]:
+    known = {(fact.chapter_id, fact.text) for fact in existing}
+    return [
+        CanonFact(text=text, chapter_id=chapter_id, story_time=story_time)
+        for text in dict.fromkeys(texts)
+        if (chapter_id, text) not in known
+    ]
+
+
+class InMemoryCanonStore:
+    """Canon held in memory, for tests and offline runs."""
+
+    def __init__(self, facts: list[CanonFact] | None = None) -> None:
+        self._facts = list(facts or [])
+        self._lock = threading.Lock()
+
+    def facts(self) -> list[CanonFact]:
+        with self._lock:
+            return [fact.model_copy() for fact in self._facts]
+
+    def commit(self, chapter_id: str, story_time: str, texts: list[str]) -> list[CanonFact]:
+        """Add facts once. Repeating a commit adds nothing."""
+        with self._lock:
+            added = _new_facts(self._facts, chapter_id, story_time, texts)
+            self._facts += added
+            return added
+
+
 class _Ledger(BaseModel):
     facts: list[CanonFact] = Field(default_factory=list)
 
 
 class CanonStore:
-    """Accepted facts in one JSON file. A stand-in for PostgreSQL behind the same two calls."""
+    """Accepted facts in one JSON file. A stand-in for PostgreSQL behind `CanonRepository`."""
 
     def __init__(self, path: Path) -> None:
         self._path = path
@@ -33,12 +70,7 @@ class CanonStore:
         """Add facts once. Repeating a commit adds nothing."""
         with self._lock:
             facts = self.facts()
-            known = {(fact.chapter_id, fact.text) for fact in facts}
-            added = [
-                CanonFact(text=text, chapter_id=chapter_id, story_time=story_time)
-                for text in dict.fromkeys(texts)
-                if (chapter_id, text) not in known
-            ]
+            added = _new_facts(facts, chapter_id, story_time, texts)
             self._path.parent.mkdir(parents=True, exist_ok=True)
             self._path.write_text(_Ledger(facts=[*facts, *added]).model_dump_json(indent=2))
             return added
@@ -65,7 +97,7 @@ def proposed_facts(run: ChapterRun) -> list[str]:
     return list(dict.fromkeys([*outline, *script]))
 
 
-def accept_chapter(canon: CanonStore, run: ChapterRun, approved_facts: list[str]) -> list[CanonFact]:
+def accept_chapter(canon: CanonRepository, run: ChapterRun, approved_facts: list[str]) -> list[CanonFact]:
     """Mark the run accepted and commit only the facts the person selected."""
     problems = blockers(run)
     if problems:

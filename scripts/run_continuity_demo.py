@@ -21,7 +21,7 @@ from comartist.agents.visual_director import VisualDirector
 from comartist.config import Settings
 from comartist.memory.continuity import carry_over
 from comartist.models import ChapterRun, RunSettings
-from comartist.tools.canon import CanonStore, accept_chapter, blockers
+from comartist.tools.canon import CanonRepository, CanonStore, accept_chapter, blockers
 from comartist.workflows.panel_loop import PanelLoop
 from comartist.workflows.script_loop import ScriptLoop
 from comartist.workflows.store import RunStore
@@ -52,7 +52,7 @@ def run_chapter(store: RunStore, chapter_id: str) -> ChapterRun:
     return run
 
 
-def accept(store: RunStore, canon: CanonStore, run: ChapterRun) -> bool:
+def accept(store: RunStore, canon: CanonRepository, run: ChapterRun) -> bool:
     if problems := blockers(run):
         print(f"{run.chapter_id} not accepted: {'; '.join(problems)}")
         return False
