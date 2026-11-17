@@ -156,8 +156,10 @@ def render_new_chapter() -> None:
             height=480,
             key=f"brief_{version}_{uploaded.name if uploaded else ''}",
         )
+        story_date = None
         try:
             spec = parse_brief(text)
+            story_date = spec.story_date
         except BriefError as error:
             st.error(f"✗ {error}")
         else:
@@ -168,7 +170,7 @@ def render_new_chapter() -> None:
         if carry.sources:
             looks = ", ".join(look.name for look in carry.locked_looks) or "none"
             use_carry = st.checkbox(
-                f"Continue from {', '.join(carry.sources)}: {len(carry.canon)} canon facts, approved looks for {looks}",
+                f"Continue from {', '.join(carry.sources)}: {len(carry.visible(story_date))} canon facts, approved looks for {looks}",
                 value=True,
                 help="Set `outfits:` in the brief to change clothes; faces and references stay.",
             )

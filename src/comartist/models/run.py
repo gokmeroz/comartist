@@ -1,6 +1,6 @@
 """Chapter spec, pipeline run status, and cost accounting."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -17,6 +17,10 @@ class ChapterSpec(BaseModel):
 
     title: str = Field(min_length=1)
     timeframe: str = ""
+    story_date: date | None = Field(
+        default=None,
+        description="A representative day for `timeframe`, so story time can be ordered (flashbacks).",
+    )
     location: str = ""
     characters: list[str] = Field(min_length=1)
     canon: list[str] = Field(default_factory=list, description="Facts agents must not change.")

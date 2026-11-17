@@ -5,6 +5,9 @@ title: "Chapter 1 - The Reunion"
 
 # When and where the chapter takes place.
 timeframe: "Summer 2024"
+# Optional: a representative day for the timeframe (YYYY-MM-DD). Set it so a
+# flashback does not receive facts that only become true later in the story.
+story_date: 2024-07-01
 location: "New York City"
 
 # Characters appearing in this chapter (names).

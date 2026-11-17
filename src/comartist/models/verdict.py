@@ -1,5 +1,6 @@
 """Chapter Judge output and the canon facts an accepted chapter may add."""
 
+from datetime import date
 from enum import StrEnum
 from typing import Self
 
@@ -42,4 +43,5 @@ class CanonFact(BaseModel):
     text: str = Field(min_length=1)
     chapter_id: str = Field(min_length=1)
     story_time: str = ""
+    holds_from: date | None = Field(default=None, description="Story date the fact starts to hold.")
     source: str = "accepted chapter"

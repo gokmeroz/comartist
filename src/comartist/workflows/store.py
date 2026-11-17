@@ -53,6 +53,7 @@ class RunStore:
     def create(self, brief_text: str, carry: CarryOver | None = None) -> ChapterRun:
         """brief.yaml keeps what the person wrote; run.json holds it merged with any carry-over."""
         spec = parse_brief(brief_text)
+        notes = carry.time_notes(spec.story_date) if carry else []
         if carry:
             spec = carry.apply(spec)
         base = slugify(spec.title)
@@ -65,9 +66,10 @@ class RunStore:
         run = ChapterRun(chapter_id=chapter_id, spec=spec)
         if carry and carry.sources:
             run.log.append(
-                f"Carried over from {', '.join(carry.sources)}: {len(carry.canon)} canon facts, "
+                f"Carried over from {', '.join(carry.sources)}: {len(carry.visible(spec.story_date))} canon facts, "
                 f"looks for {', '.join(look.name for look in carry.locked_looks) or 'nobody'}"
             )
+            run.log += notes
         self.save(run)
         return run
 

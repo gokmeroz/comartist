@@ -1,6 +1,6 @@
 """Two-chapter continuity: carry-over of canon and looks, outfit changes, and the eval checks."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import yaml
@@ -140,3 +140,67 @@ def test_eval_briefs_are_valid_and_change_outfits() -> None:
     second = parse_brief((EVALS / "chapter-2.yaml").read_text())
     assert first.location == second.location == expectations().location
     assert set(second.outfits) == set(expectations().outfit_changes)
+
+
+# Story-time ordering: a flashback must not receive facts that only hold later.
+
+SUMMER_2016, SUMMER_2024 = date(2016, 7, 1), date(2024, 7, 1)
+
+
+def dated_first_chapter() -> ChapterRun:
+    run = first_chapter()
+    run.spec = run.spec.model_copy(update={"story_date": SUMMER_2024})
+    return run
+
+
+def flashback(**spec) -> ChapterSpec:
+    fields = {"title": "Welcome to 2016", "premise": "p", "characters": ["Matt", "Andy"], "timeframe": "Summer 2016"}
+    return ChapterSpec(**{**fields, **spec})
+
+
+def test_flashback_does_not_see_later_facts() -> None:
+    fact = CanonFact(text="Matt sold his bike.", chapter_id="ch1", story_time="Summer 2024", holds_from=SUMMER_2024)
+    carry = carry_over([dated_first_chapter()], [fact])
+    spec = carry.apply(flashback(story_date=SUMMER_2016, canon=["They are in middle school."]))
+    assert spec.canon == ["They are in middle school."]
+    assert carry.time_notes(SUMMER_2016) == ["Left out 2 carried facts that only hold after 2016-07-01."]
+
+
+def test_sequel_sees_earlier_facts() -> None:
+    carry = carry_over([dated_first_chapter()], [])
+    spec = carry.apply(flashback(title="Later", timeframe="Summer 2025", story_date=date(2025, 7, 1)))
+    assert spec.canon == ["As of Summer 2024: They have not met since middle school."]
+    assert carry.time_notes(date(2025, 7, 1)) == []
+
+
+def test_fact_on_the_same_day_is_kept() -> None:
+    assert carry_over([dated_first_chapter()], []).visible(SUMMER_2024) == [
+        "As of Summer 2024: They have not met since middle school."
+    ]
+
+
+def test_committed_fact_falls_back_to_chapter_date() -> None:
+    fact = CanonFact(text="Matt sold his bike.", chapter_id="ch1", story_time="Summer 2024")
+    assert carry_over([dated_first_chapter()], [fact]).visible(SUMMER_2016) == []
+
+
+def test_undated_facts_pass_with_a_warning() -> None:
+    carry = carry_over([first_chapter()], [])
+    assert carry.visible(SUMMER_2016) == ["As of Summer 2024: They have not met since middle school."]
+    assert carry.time_notes(SUMMER_2016) == ["1 undated carried facts could not be time-checked."]
+
+
+def test_undated_chapter_is_not_time_checked() -> None:
+    carry = carry_over([dated_first_chapter()], [])
+    assert carry.apply(flashback()).canon == ["As of Summer 2024: They have not met since middle school."]
+    assert carry.time_notes(None) == ["No story_date on this chapter: 1 carried facts were not time-checked."]
+
+
+def test_store_logs_time_notes(tmp_path: Path) -> None:
+    carry = carry_over([dated_first_chapter()], [])
+    brief = yaml.safe_dump({"title": "Flashback", "premise": "p", "characters": ["Matt"], "story_date": "2016-07-01"})
+    run = RunStore(tmp_path).create(brief, carry)
+    assert run.spec.story_date == SUMMER_2016
+    assert run.spec.canon == []
+    assert "Carried over from ch1: 0 canon facts" in run.log[0]
+    assert run.log[1] == "Left out 1 carried facts that only hold after 2016-07-01."

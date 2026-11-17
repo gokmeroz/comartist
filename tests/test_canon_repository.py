@@ -1,6 +1,7 @@
 """Contract every CanonRepository implementation must meet."""
 
 from collections.abc import Callable
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -60,3 +61,8 @@ def test_returned_facts_cannot_change_canon(canon: CanonRepository) -> None:
 def test_json_store_persists_across_instances(tmp_path: Path) -> None:
     CanonStore(tmp_path / "canon.json").commit("c1", "2024", ["A."])
     assert [f.text for f in CanonStore(tmp_path / "canon.json").facts()] == ["A."]
+
+
+def test_commit_records_story_date(canon: CanonRepository) -> None:
+    canon.commit("c1", "Summer 2024", ["A."], date(2024, 7, 1))
+    assert canon.facts()[0].holds_from == date(2024, 7, 1)

@@ -1,6 +1,7 @@
 """The acceptance boundary. Canon only changes here, after an explicit human decision."""
 
 import threading
+from datetime import date
 from pathlib import Path
 from typing import Protocol
 
@@ -19,13 +20,17 @@ class CanonRepository(Protocol):
 
     def facts(self) -> list[CanonFact]: ...
 
-    def commit(self, chapter_id: str, story_time: str, texts: list[str]) -> list[CanonFact]: ...
+    def commit(
+        self, chapter_id: str, story_time: str, texts: list[str], holds_from: date | None = None
+    ) -> list[CanonFact]: ...
 
 
-def _new_facts(existing: list[CanonFact], chapter_id: str, story_time: str, texts: list[str]) -> list[CanonFact]:
+def _new_facts(
+    existing: list[CanonFact], chapter_id: str, story_time: str, texts: list[str], holds_from: date | None
+) -> list[CanonFact]:
     known = {(fact.chapter_id, fact.text) for fact in existing}
     return [
-        CanonFact(text=text, chapter_id=chapter_id, story_time=story_time)
+        CanonFact(text=text, chapter_id=chapter_id, story_time=story_time, holds_from=holds_from)
         for text in dict.fromkeys(texts)
         if (chapter_id, text) not in known
     ]
@@ -42,10 +47,12 @@ class InMemoryCanonStore:
         with self._lock:
             return [fact.model_copy() for fact in self._facts]
 
-    def commit(self, chapter_id: str, story_time: str, texts: list[str]) -> list[CanonFact]:
+    def commit(
+        self, chapter_id: str, story_time: str, texts: list[str], holds_from: date | None = None
+    ) -> list[CanonFact]:
         """Add facts once. Repeating a commit adds nothing."""
         with self._lock:
-            added = _new_facts(self._facts, chapter_id, story_time, texts)
+            added = _new_facts(self._facts, chapter_id, story_time, texts, holds_from)
             self._facts += added
             return added
 
@@ -66,11 +73,13 @@ class CanonStore:
             return []
         return _Ledger.model_validate_json(self._path.read_text()).facts
 
-    def commit(self, chapter_id: str, story_time: str, texts: list[str]) -> list[CanonFact]:
+    def commit(
+        self, chapter_id: str, story_time: str, texts: list[str], holds_from: date | None = None
+    ) -> list[CanonFact]:
         """Add facts once. Repeating a commit adds nothing."""
         with self._lock:
             facts = self.facts()
-            added = _new_facts(facts, chapter_id, story_time, texts)
+            added = _new_facts(facts, chapter_id, story_time, texts, holds_from)
             self._path.parent.mkdir(parents=True, exist_ok=True)
             self._path.write_text(_Ledger(facts=[*facts, *added]).model_dump_json(indent=2))
             return added
@@ -106,7 +115,7 @@ def accept_chapter(canon: CanonRepository, run: ChapterRun, approved_facts: list
     unknown = [fact for fact in approved_facts if fact not in offered]
     if unknown:
         raise AcceptanceError(f"Not proposed by this run: {', '.join(unknown)}")
-    added = canon.commit(run.chapter_id, run.spec.timeframe, approved_facts)
+    added = canon.commit(run.chapter_id, run.spec.timeframe, approved_facts, run.spec.story_date)
     run.accepted = True
     run.log.append(f"Accepted by user; {len(added)} facts committed to canon.")
     return added

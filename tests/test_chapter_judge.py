@@ -1,6 +1,7 @@
 """Chapter Judge verdicts and the acceptance boundary for canon."""
 
 import json
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -120,3 +121,10 @@ def test_unaccepted_panel_blocks_acceptance() -> None:
     panel = PanelResult(panel_id="p1-1", page=1, index=1, description="d",
                         attempts=[PanelAttempt(attempt=1, accepted=False, failure="ARTIFACT")])
     assert any("p1-1" in p for p in blockers(good_run(panels=[panel])))
+
+
+def test_accepted_facts_hold_from_the_chapter_date(tmp_path: Path) -> None:
+    canon = CanonStore(tmp_path / "canon.json")
+    run = good_run(spec=SPEC.model_copy(update={"story_date": date(2024, 7, 1)}))
+    accept_chapter(canon, run, ["Matt sold his bike."])
+    assert canon.facts()[0].holds_from == date(2024, 7, 1)
